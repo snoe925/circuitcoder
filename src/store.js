@@ -8,7 +8,7 @@ export function defaultSave() {
     mode: "challenge",
     cmos: { unlocked: 1, stars: {}, playground: null },
     analog: { unlocked: 1, stars: {}, playground: null },
-    clocked: { unlocked: 1, stars: {} },
+    clocked: { unlocked: 1, stars: {}, playground: null },
   };
 }
 

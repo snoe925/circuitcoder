@@ -212,6 +212,7 @@ async function unlockAll(page) {
         unlocked: 500, stars: {}, sandbox: null,
         cmos: { unlocked: 500, stars: {}, playground: null },
         analog: { unlocked: 500, stars: {}, playground: null },
+        clocked: { unlocked: 500, stars: {} },
       })
     )
   );
@@ -346,7 +347,7 @@ test("NMOS switch solves with a resistor down to GND", async ({ page }) => {
 
 test("master sandbox switches benches and persists", async ({ page }) => {
   await page.locator("#mode-sandbox").click();
-  await expect(page.locator(".level-card[data-bench]")).toHaveCount(3);
+  await expect(page.locator(".level-card[data-bench]")).toHaveCount(4);
   // transistor bench: free CMOS parts
   await page.locator('.level-card[data-bench="cmos"]').click();
   await expect(page.locator('.pal-btn[data-type="NMOS"]')).toBeEnabled();
@@ -480,6 +481,55 @@ test("probes are free: unlimited and star-neutral in challenges", async ({ page 
   await wire(page.locator(`.node[data-id="${notId}"] .pin.out`), page.locator(`.node[data-id="${probeId}"] .pin.in[data-pin="0"]`));
   await page.locator("#check-btn").click();
   await expect(page.locator("#check-results")).toContainText("★★★");
+});
+
+test("Clocked tab shows clock terminals and traces", async ({ page }) => {
+  await page.locator("#mode-clocked").click();
+  await expect(page.locator("#level-name")).toContainText("K1. Blink");
+  await expect(page.locator("#nodes .node.type-CLOCK")).toHaveCount(1);
+  await expect(page.locator("#trace-view")).toBeVisible();
+  await expect(page.locator("#traces path")).not.toHaveCount(0);
+  await expect(page.locator("#t-scrub")).toBeVisible();
+});
+
+test("Divide-by-2 solves end-to-end (toggle HI, wire, check)", async ({ page }) => {
+  await unlockAll(page);
+  await page.locator("#mode-clocked").click();
+  await page.locator(".level-card", { hasText: "Divide by 2" }).click();
+  await expect(page.locator("#level-name")).toContainText("Divide by 2");
+  // HI is the logic-high input: toggle it to 1
+  await page.locator('.node[data-id]').first().waitFor();
+  const hiId = await page.locator(".node.type-INPUT").getAttribute("data-id");
+  await page.locator(`.node[data-id="${hiId}"]`).click();
+  await page.locator('.pal-btn[data-type="TFF"]').click();
+  const tffId = await page.locator(".node.type-TFF").getAttribute("data-id");
+  const outId = await page.locator(".node.type-OUTPUT").getAttribute("data-id");
+  const clkId = await page.locator(".node.type-CLOCK").getAttribute("data-id");
+  const wire = async (a, b) => { await a.click(); await b.click(); };
+  await wire(
+    page.locator(`.node[data-id="${hiId}"] .pin.out`),
+    page.locator(`.node[data-id="${tffId}"] .pin.in[data-pin="0"]`)
+  );
+  await wire(
+    page.locator(`.node[data-id="${clkId}"] .pin.out`),
+    page.locator(`.node[data-id="${tffId}"] .pin.in[data-pin="1"]`)
+  );
+  await wire(
+    page.locator(`.node[data-id="${tffId}"] .pin.out[data-pin="0"]`),
+    page.locator(`.node[data-id="${outId}"] .pin.in[data-pin="0"]`)
+  );
+  await page.locator("#check-btn").click();
+  await expect(page.locator("#check-results")).toContainText("Solved!");
+  await expect(page.locator(".level-card", { hasText: "Divide by 4" })).toBeEnabled();
+});
+
+test("Clocked bench appears in master sandbox", async ({ page }) => {
+  await page.locator("#mode-sandbox").click();
+  await page.locator('.level-card[data-bench="clocked"]').click();
+  await expect(page.locator('.pal-btn[data-type="DFF"]')).toBeEnabled();
+  await expect(page.locator("#trace-view")).toBeVisible();
+  await page.locator('.pal-btn[data-type="CLOCK"]').click();
+  await expect(page.locator(".node.type-CLOCK")).toHaveCount(1);
 });
 
 test("reset button clears a placed gate", async ({ page }) => {

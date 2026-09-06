@@ -47,4 +47,16 @@ describe("gateSVG", () => {
     assert.throws(() => gateSVG("OUTPUT"));
     assert.throws(() => gateSVG("FLIPFLOP"));
   });
+
+  it("renders clocked parts (flop box, clock circle, delay)", () => {
+    const dff = gateSVG("DFF");
+    assert.match(dff, /<rect/);
+    assert.ok(dff.includes(">D<") || dff.includes(">D</text>"), "D label");
+    assert.ok(dff.includes("Qb"), "Qb label");
+    assert.match(dff, /<polygon/, "clock triangle");
+    assert.match(gateSVG("TFF"), /T<\/text>/);
+    assert.match(gateSVG("CLOCK"), /<circle/);
+    assert.match(gateSVG("DELAY"), /Δ1/);
+    assert.match(gateSVG("DLATCH"), /EN/);
+  });
 });

@@ -85,6 +85,13 @@ body {
 .kind-GND { border-color: var(--muted); }
 .term-vdd { color: #f87171 !important; }
 .node-lamp.on-static { background: #064e3b; border-color: var(--on); color: #d1fae5; }
+/* Clocked trace viewer */
+.trace-view { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.trace-view[hidden] { display: none; }
+.trace-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.trace-toolbar input[type="range"] { flex: 1; accent-color: var(--accent); }
+.trace-scroll { overflow-x: auto; }
+#traces { display: block; }
 .node-lamp.probe-v { width: auto; min-width: 44px; border-radius: 8px; font-size: 12px; padding: 0 6px; }
 .vsrc-slider { width: 90%; margin: 4px auto 2px; accent-color: var(--accent); }
 #xfer { width: 100%; height: auto; background: #0b1122; border: 1px solid var(--line); border-radius: 8px; }

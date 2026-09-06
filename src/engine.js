@@ -27,6 +27,13 @@ export const GATE_DEFS = {
   // PROBE is a passive observer: one input, no output, never drives the
   // net it watches. Free measurement tool (no budget, no par cost).
   PROBE: { inputs: 1, outputs: 0, label: "PROBE", symbol: "●" },
+  // ---- clocked parts (interpreted by src/clocked.js, not simulate()) ----
+  // DFF/TFF pins: D|T=0, CLK=1, R=2. DLATCH: D=0, EN=1. DELAY: in=0.
+  CLOCK: { inputs: 0, outputs: 1, label: "CLOCK", symbol: "CLK" },
+  DFF: { inputs: 3, outputs: 2, label: "DFF", symbol: "D▷" },
+  TFF: { inputs: 3, outputs: 2, label: "TFF", symbol: "T▷" },
+  DLATCH: { inputs: 2, outputs: 1, label: "LATCH", symbol: "D⎍" },
+  DELAY: { inputs: 1, outputs: 1, label: "DELAY", symbol: "Δ1" },
 };
 
 export const GATE_TYPES = Object.keys(GATE_DEFS);
@@ -270,10 +277,10 @@ export function evaluateLevel(circuit, level, inputIds, outputIds) {
   return { passed: results.every((r) => r.ok), results, unstable };
 }
 
-/** Count non-terminal gates (excludes INPUT/OUTPUT/PROBE). */
+/** Count non-terminal gates (excludes INPUT/OUTPUT/PROBE/CLOCK infrastructure). */
 export function countGates(circuit) {
   return Object.values(circuit.nodes).filter(
-    (n) => n.type !== "INPUT" && n.type !== "OUTPUT" && n.type !== "PROBE"
+    (n) => n.type !== "INPUT" && n.type !== "OUTPUT" && n.type !== "PROBE" && n.type !== "CLOCK"
   ).length;
 }
 

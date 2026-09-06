@@ -28,9 +28,12 @@ npm run serve   # then open http://localhost:8000
   transmission gate → SR latch). Transistors are
   voltage-controlled switches: amber wires float, red means short.
 - **Op-Amp Lab:** 8 challenges (follower → comparator → amps → summer →
-  Schmitt → difference → clipping). Ideal op-amps (±11V
+  Schmitt → difference → clipping) + Sandbox. Ideal op-amps (±11V
   rails, tolerance-checked), gradient wires, voltmeter probes, transfer
   curve, source sliders, click-to-step resistors.
+- **Clocked:** 12 challenges (blink → delay → flops → dividers → counters →
+  shift/latch → Johnson → PWM) + bench. Tick simulator with rising edges,
+  timing-diagram traces, transport (run/play/scrub), click-to-cycle clocks.
 
 ## Gates levels (112)
 
@@ -51,6 +54,8 @@ src/levels.js  # Pack 1 catalogue + campaign merge (tested)
 src/pack2.js   # Pack 2: N01–N100 catalogue (tested)
 src/cmos.js    # CMOS switch-level simulator (tested; bench UI next)
 src/cmos-levels.js # CMOS Lab C1–C12 catalogue (tested)
+src/clocked.js  # tick simulator: flops, edges, traces (tested; bench UI next)
+src/clocked-levels.js # Clocked K1–K12 cookbook (tested)
 src/store.js   # localStorage persistence
 src/app.js     # UI: palette/canvas/wiring/verification
 tests/engine.test.mjs  tests/levels.test.mjs

@@ -16,6 +16,11 @@ export const GATE_ART_HEIGHT = {
   NOR: 68,
   XOR: 68,
   XNOR: 68,
+  CLOCK: 52,
+  DFF: 68,
+  TFF: 68,
+  DLATCH: 68,
+  DELAY: 52,
 };
 
 const LEAD = "#8ea2c8";
@@ -34,6 +39,14 @@ const AND_BODY = `<path d="M24 14H46A20 20 0 0 1 46 54H24Z" fill="${BODY_FILL}" 
 const OR_BODY = `<path d="M24 12C32 24 32 44 24 56L31 56C45 52 57 44 65 34C57 24 45 16 31 12Z" fill="${BODY_FILL}" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/>`;
 const XOR_PRE = `<path d="M17 12C25 24 25 44 17 56" fill="none" stroke="${INK}" stroke-width="2"/>`;
 const NOT_BODY = `<path d="M26 12L26 40L58 26Z" fill="${BODY_FILL}" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/>`;
+const flopBody = (main, h) =>
+  `<rect x="16" y="8" width="60" height="${h - 16}" fill="${BODY_FILL}" stroke="${INK}" stroke-width="2"/>`
+  + `<text x="22" y="22" fill="${INK}" font-size="11">${main}</text>`
+  + `<text x="22" y="38" fill="${LEAD}" font-size="9">CLK</text>`
+  + `<polygon points="8,30 8,38 15,34" fill="${INK}"/>`
+  + `<text x="22" y="56" fill="${LEAD}" font-size="9">R</text>`
+  + `<text x="62" y="28" fill="${INK}" font-size="11">Q</text>`
+  + `<text x="58" y="50" fill="${LEAD}" font-size="9">Qb</text>`;
 
 function art(type) {
   switch (type) {
@@ -54,6 +67,37 @@ function art(type) {
         `<path d="M0 26H26" stroke="${LEAD}" stroke-width="2" fill="none"/>` +
         `${NOT_BODY}${bubble(62.5, 26)}` +
         `<path d="M67 26H92" stroke="${LEAD}" stroke-width="2" fill="none"/>`
+      );
+    case "DFF":
+    case "TFF": {
+      const main = type === "DFF" ? "D" : "T";
+      return (
+        `<path d="M0 17H16M0 34H16M0 51H16" stroke="${LEAD}" stroke-width="2" fill="none"/>` +
+        `${flopBody(main, 68)}` +
+        `<path d="M76 23H92M76 45H92" stroke="${LEAD}" stroke-width="2" fill="none"/>`
+      );
+    }
+    case "DLATCH":
+      return (
+        `<path d="M0 23H16M0 45H16" stroke="${LEAD}" stroke-width="2" fill="none"/>` +
+        `<rect x="16" y="8" width="60" height="52" fill="${BODY_FILL}" stroke="${INK}" stroke-width="2"/>` +
+        `<text x="22" y="28" fill="${INK}" font-size="11">D</text>` +
+        `<text x="22" y="50" fill="${LEAD}" font-size="9">EN</text>` +
+        `<text x="62" y="39" fill="${INK}" font-size="11">Q</text>` +
+        `<path d="M76 34H92" stroke="${LEAD}" stroke-width="2" fill="none"/>`
+      );
+    case "CLOCK":
+      return (
+        `<circle cx="42" cy="26" r="17" fill="${BODY_FILL}" stroke="${INK}" stroke-width="2"/>` +
+        `<text x="42" y="31" fill="${INK}" font-size="12" text-anchor="middle">CLK</text>` +
+        `<path d="M59 26H92" stroke="${LEAD}" stroke-width="2" fill="none"/>`
+      );
+    case "DELAY":
+      return (
+        `<path d="M0 26H16" stroke="${LEAD}" stroke-width="2" fill="none"/>` +
+        `<rect x="16" y="10" width="60" height="32" fill="${BODY_FILL}" stroke="${INK}" stroke-width="2"/>` +
+        `<text x="46" y="32" fill="${INK}" font-size="12" text-anchor="middle">Δ1</text>` +
+        `<path d="M76 26H92" stroke="${LEAD}" stroke-width="2" fill="none"/>`
       );
     default:
       throw new Error(`No gate artwork for type: ${type}`);

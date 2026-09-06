@@ -14,6 +14,8 @@ import {
   deserializeCircuit,
 } from "./engine.js";
 import { LEVELS, starsFor } from "./levels.js";
+import { LEVELS_CLOCKED } from "./clocked-levels.js";
+import { simulateClocked, evaluateClocked } from "./clocked.js";
 import { loadSave, persistSave } from "./store.js";
 import { gateSVG } from "./gates.js";
 import { outputExprs } from "./synth.js";
@@ -47,13 +49,16 @@ const SANDBOX_BENCHES = [
   { id: "gates", sym: "&", name: "Gates bench", tag: "logic gates, everything unlocked" },
   { id: "cmos", sym: "T", name: "Transistor bench", tag: "CMOS parts, everything unlocked" },
   { id: "analog", sym: "~", name: "Analog bench", tag: "op-amps, everything unlocked" },
+  { id: "clocked", sym: "◷", name: "Clocked bench", tag: "flops, clocks, traces" },
 ];
 const activeBench = () => {
   if (state.mode === "sandbox") return save.sandboxBench;
   if (state.mode === "cmos") return "cmos";
   if (state.mode === "analog") return "analog";
+  if (state.mode === "clocked") return "clocked";
   return "gates";
 };
+const inClockedBench = () => activeBench() === "clocked";
 function renderSandboxPicker() {
   const list = $("#level-list");
   list.innerHTML = "";
@@ -85,11 +90,15 @@ const state = {
   inputStates: {},
   inputIds: [],
   outputIds: [],
+  clockIds: [],
   selected: null, // { kind: 'node'|'wire', id }
-  pendingWire: null, // { from } | { to, toPin }
+  pendingWire: null, // { from, fromPin? } | { to, toPin }
   lastResults: null,
   spawnOffset: 0,
+  clockTick: 0,
+  clockTraces: null,
 };
+let clockTimer = null;
 
 const PIN_GEOM = {
   out: { dx: NODE_W, dy: null }, // dy = h/2 computed
@@ -104,7 +113,11 @@ function nodeHeight(node) {
 
 function pinXY(node, kind, pin = 0) {
   const h = nodeHeight(node);
-  if (kind === "out") return { x: node.x + NODE_W, y: node.y + Math.round(h / 2) };
+  if (kind === "out") {
+    const nOut = GATE_DEFS[node.type].outputs;
+    const y = nOut <= 1 ? Math.round(h / 2) : Math.round((h * (pin + 1)) / (nOut + 1));
+    return { x: node.x + NODE_W, y: node.y + y };
+  }
   const k = GATE_DEFS[node.type].inputs;
   const p = PIN_GEOM.in(h, k, pin);
   return { x: node.x + p.dx, y: node.y + p.dy };
@@ -117,6 +130,7 @@ function currentLevel() {
 }
 
 function loadLevel(index) {
+  stopClock();
   state.levelIndex = Math.max(0, Math.min(LEVELS.length - 1, index));
   state.mode = "challenge";
   state.selected = null;
@@ -164,12 +178,82 @@ function loadLevel(index) {
   renderAll();
 }
 
+function clockedLevel() {
+  return LEVELS_CLOCKED[state.levelIndex];
+}
+
+function clockTicks() {
+  return state.mode === "clocked" ? clockedLevel().ticks : 8;
+}
+
+function loadClocked(index) {
+  stopClock();
+  state.levelIndex = Math.max(0, Math.min(LEVELS_CLOCKED.length - 1, index));
+  state.mode = "clocked";
+  state.selected = null;
+  state.pendingWire = null;
+  state.lastResults = null;
+  state.clockTick = 0;
+  state.clockTraces = null;
+  const level = clockedLevel();
+  const c = createCircuit();
+  state.inputIds = [];
+  state.outputIds = [];
+  state.clockIds = [];
+  state.inputStates = {};
+  level.inputs.forEach((name, i) => {
+    const n = addNode(c, "INPUT", 30, 50 + i * 100, { locked: true, name });
+    state.inputIds.push(n.id);
+    state.inputStates[n.id] = 0;
+  });
+  (level.clocks ?? []).forEach((name, i) => {
+    const n = addNode(c, "CLOCK", 30, 400, { locked: true, name, period: level.period ?? 2 });
+    state.clockIds.push(n.id);
+  });
+  level.probes.forEach((name, i) => {
+    const n = addNode(c, "OUTPUT", W - NODE_W - 30, 50 + i * 100, { locked: true, name });
+    state.outputIds.push(n.id);
+  });
+  state.circuit = c;
+  state.spawnOffset = 0;
+  renderAll();
+}
+
+/** Map level input/clock/probe names to node ids. */
+function clockNameToId() {
+  const lv = clockedLevel();
+  const m = {};
+  lv.inputs.forEach((n, i) => { m[n] = state.inputIds[i]; });
+  (lv.clocks ?? []).forEach((n, i) => { m[n] = state.clockIds[i]; });
+  lv.probes.forEach((n, i) => { m[n] = state.outputIds[i]; });
+  return m;
+}
+
 function loadSandbox() {
   state.mode = "sandbox";
   save.mode = "sandbox";
   persistSave(save);
+  stopClock();
   if (save.sandboxBench === "cmos") { cmos().enterPlayground(); return; }
   if (save.sandboxBench === "analog") { analog().enterPlayground(); return; }
+  if (save.sandboxBench === "clocked") {
+    state.selected = null;
+    state.pendingWire = null;
+    state.lastResults = null;
+    state.inputIds = [];
+    state.outputIds = [];
+    state.clockIds = [];
+    state.inputStates = {};
+    state.clockTick = 0;
+    state.clockTraces = null;
+    state.circuit = save.sandboxClock ? deserializeCircuit(save.sandboxClock) : createCircuit();
+    for (const n of Object.values(state.circuit.nodes)) {
+      if (n.type === "INPUT") state.inputStates[n.id] = n.value ? 1 : 0;
+    }
+    state.spawnOffset = 0;
+    renderAll();
+    return;
+  }
   state.selected = null;
   state.pendingWire = null;
   state.lastResults = null;
@@ -189,7 +273,11 @@ function loadSandbox() {
 
 function persistSandbox() {
   if (state.mode !== "sandbox") return;
-  save.sandbox = serializeCircuit(state.circuit);
+  if (save.sandboxBench === "clocked") {
+    save.sandboxClock = serializeCircuit(state.circuit);
+  } else {
+    save.sandbox = serializeCircuit(state.circuit);
+  }
   persistSave(save);
 }
 
@@ -200,10 +288,19 @@ function persistSandbox() {
 // vanishing (an almost-empty palette looks broken).
 const ALL_GATES = ["AND", "OR", "NOT", "NAND", "NOR", "XOR", "XNOR"];
 const ALL_PARTS = ["INPUT", "OUTPUT", ...ALL_GATES, "PROBE"];
+const CLOCKED_PARTS = ["DFF", "TFF", "DLATCH", "DELAY", "CLOCK"];
 
 function paletteEntries() {
+  if (state.mode === "sandbox") {
+    return save.sandboxBench === "clocked"
+      ? [...ALL_PARTS, ...CLOCKED_PARTS]
+      : ALL_PARTS;
+  }
+  if (state.mode === "clocked") {
+    // CLOCK terminals are pre-placed; the button shows locked for honesty.
+    return [...Object.keys(clockedLevel().allowed), "PROBE", "CLOCK"];
+  }
   // PROBE is a free measurement tool everywhere: unlimited, unbudgeted.
-  if (state.mode === "sandbox") return ALL_PARTS;
   return [...ALL_GATES, "PROBE"];
 }
 
@@ -215,7 +312,9 @@ function renderPalette() {
   const el = $("#palette");
   el.innerHTML = "";
   $("#palette-label").textContent = state.mode === "sandbox" ? "Parts (all unlocked)" : "Parts (this level's budget)";
-  $("#palette-hint").textContent = "INPUT/OUTPUT terminals are pre-placed on the left/right — wire them up. Clip a free PROBE onto any output to watch it live.";
+  $("#palette-hint").textContent = inClockedBench()
+    ? "IN/CLK/OUT terminals are pre-placed — wire them up. Click a CLOCK to change its period."
+    : "INPUT/OUTPUT terminals are pre-placed on the left/right — wire them up. Clip a free PROBE onto any output to watch it live.";
   $("#expr-toggle").style.display = "";
   for (const type of paletteEntries()) {
     const btn = document.createElement("button");
@@ -223,14 +322,14 @@ function renderPalette() {
     btn.dataset.type = type;
     let remaining = Infinity;
     let available = true;
-    if (state.mode === "challenge" && type !== "PROBE") {
-      const budget = currentLevel().allowed[type] ?? 0;
+    if ((state.mode === "challenge" || state.mode === "clocked") && type !== "PROBE") {
+      const budget = (state.mode === "clocked" ? clockedLevel().allowed : currentLevel().allowed)[type] ?? 0;
       available = budget > 0;
       remaining = budget - usedCount(type);
     }
     const def = GATE_DEFS[type];
     const countText =
-      state.mode === "challenge" && !available
+      (state.mode === "challenge" || state.mode === "clocked") && !available
         ? `<span class="pal-count">locked</span>`
         : remaining !== Infinity
           ? `<span class="pal-count">${remaining} left</span>`
@@ -249,8 +348,8 @@ function renderPalette() {
 }
 
 function addGate(type) {
-  if (state.mode === "challenge" && type !== "PROBE") {
-    const budget = currentLevel().allowed[type] ?? 0;
+  if ((state.mode === "challenge" || state.mode === "clocked") && type !== "PROBE") {
+    const budget = (state.mode === "clocked" ? clockedLevel().allowed : currentLevel().allowed)[type] ?? 0;
     if (usedCount(type) >= budget) return;
   }
   const gx = state.spawnOffset % 5, gy = Math.floor(state.spawnOffset / 5) % 3;
@@ -309,24 +408,29 @@ function renderNodes() {
 
     // pins (24px targets; centered on the pin point)
     const PIN_R = 12;
-    if (def.outputs > 0) {
+    const nOut = def.outputs;
+    for (let o = 0; o < nOut; o++) {
+      const oy = nOut <= 1
+        ? Math.round(h / 2)
+        : Math.round((h * (o + 1)) / (nOut + 1));
       const p = document.createElement("button");
       p.className =
         "pin out" +
-        (state.pendingWire?.from === node.id ? " pending" : "") +
+        (state.pendingWire?.from === node.id && (state.pendingWire?.fromPin ?? 0) === o ? " pending" : "") +
         (state.pendingWire?.to ? " compat" : "");
       p.dataset.node = node.id;
       p.dataset.kind = "out";
-      p.setAttribute("aria-label", `Output of ${node.name ?? node.id}. Activate to start or finish a wire.`);
-      p.style.top = `${Math.round(h / 2) - PIN_R}px`;
+      p.dataset.pin = String(o);
+      p.setAttribute("aria-label", `Output ${o} of ${node.name ?? node.id}. Activate to start or finish a wire.`);
+      p.style.top = `${oy - PIN_R}px`;
       p.style.left = `${NODE_W - PIN_R}px`;
       p.addEventListener("pointerdown", (e) => {
         e.stopPropagation();
-        onOutputPin(node.id);
+        onOutputPin(node.id, o);
       });
       p.addEventListener("click", (e) => {
         e.stopPropagation();
-        onOutputPin(node.id);
+        onOutputPin(node.id, o);
       });
       div.appendChild(p);
     }
@@ -377,7 +481,11 @@ function renderNodes() {
     div.addEventListener("click", (e) => {
       if (e.target.closest(".pin") || e.target.closest(".node-del")) return;
       if (node.type === "INPUT") toggleInput(node.id);
-      else {
+      else if (node.type === "CLOCK") {
+        node.period = node.period >= 8 ? 2 : (node.period ?? 2) * 2;
+        setStatus(`Clock period → ${node.period} ticks.`);
+        afterMutation({ structural: false });
+      } else {
         state.selected = { kind: "node", id: node.id };
         renderNodes();
       }
@@ -386,6 +494,11 @@ function renderNodes() {
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
         if (node.type === "INPUT") toggleInput(node.id);
+        else if (node.type === "CLOCK") {
+          node.period = node.period >= 8 ? 2 : (node.period ?? 2) * 2;
+          setStatus(`Clock period → ${node.period} ticks.`);
+          afterMutation({ structural: false });
+        }
       }
     });
     layer.appendChild(div);
@@ -411,7 +524,8 @@ function renderWires() {
     const b = pinXY(to, "in", wire.toPin);
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     path.setAttribute("d", wirePathD(a, b));
-    const v = liveSim ? liveSim.nodeOutputs[wire.from] ?? 0 : 0;
+    let v = liveSim ? liveSim.nodeOutputs[wire.from] ?? 0 : 0;
+    if (wire.fromPin === 1 && (from.type === "DFF" || from.type === "TFF")) v = v ? 0 : 1;
     path.setAttribute("class", `wire v${v}` + (state.selected?.kind === "wire" && state.selected.id === wire.id ? " selected" : ""));
     path.dataset.id = wire.id;
     path.addEventListener("click", (e) => {
@@ -528,7 +642,7 @@ function positionNodeEl(nodeId, x, y) {
  * Wiring works in either direction: click any pin (output or input) to start,
  * then click the other end to complete. Toggling the same pin cancels.
  */
-function onOutputPin(nodeId) {
+function onOutputPin(nodeId, fromPin = 0) {
   if (state.pendingWire?.to) {
     const { to, toPin } = state.pendingWire;
     state.pendingWire = null;
@@ -538,17 +652,17 @@ function onOutputPin(nodeId) {
       renderWires();
       return;
     }
-    completeWire(nodeId, to, toPin);
+    completeWire(nodeId, to, toPin, fromPin);
     return;
   }
-  if (state.pendingWire?.from === nodeId) {
+  if (state.pendingWire?.from === nodeId && (state.pendingWire?.fromPin ?? 0) === fromPin) {
     state.pendingWire = null; // toggle off
     renderNodes();
     renderWires();
     setStatus("Wire cancelled.");
     return;
   }
-  state.pendingWire = { from: nodeId };
+  state.pendingWire = { from: nodeId, fromPin };
   state.selected = null;
   renderNodes();
   renderWires();
@@ -558,6 +672,7 @@ function onOutputPin(nodeId) {
 function onInputPin(nodeId, pin) {
   if (state.pendingWire?.from) {
     const fromId = state.pendingWire.from;
+    const fromPin = state.pendingWire.fromPin ?? 0;
     state.pendingWire = null;
     if (fromId === nodeId) {
       setStatus("Cannot wire a gate to itself.");
@@ -565,7 +680,7 @@ function onInputPin(nodeId, pin) {
       renderNodes();
       return;
     }
-    completeWire(fromId, nodeId, pin);
+    completeWire(fromId, nodeId, pin, fromPin);
     return;
   }
   if (state.pendingWire?.to === nodeId && state.pendingWire?.toPin === pin) {
@@ -582,9 +697,9 @@ function onInputPin(nodeId, pin) {
   setStatus("Input selected: now click an output pin (right dot) to connect. Esc cancels.");
 }
 
-function completeWire(fromId, toId, toPin) {
+function completeWire(fromId, toId, toPin, fromPin = 0) {
   // Replace existing feed if occupied (friendlier than error)
-  const res = setInputWire(state.circuit, fromId, toId, toPin, 0);
+  const res = setInputWire(state.circuit, fromId, toId, toPin, fromPin);
   if (!res.ok) {
     setStatus(`Wire rejected: ${res.error}`);
   } else {
@@ -612,6 +727,7 @@ function deleteNode(nodeId) {
   delete state.inputStates[nodeId];
   state.inputIds = state.inputIds.filter((id) => id !== nodeId);
   state.outputIds = state.outputIds.filter((id) => id !== nodeId);
+  state.clockIds = state.clockIds.filter((id) => id !== nodeId);
   if (state.selected?.id === nodeId) state.selected = null;
   afterMutation();
 }
@@ -639,8 +755,38 @@ function runLiveSim() {
   return liveSim;
 }
 
+/** Free-run the clocked bench over N ticks with held inputs. */
+function runClockedSim() {
+  const ticks = state.mode === "clocked" ? clockedLevel().ticks : 8;
+  const sim = simulateClocked(state.circuit, { ...state.inputStates }, ticks);
+  state.clockTraces = sim.traces;
+  state.clockTick = Math.min(state.clockTick, ticks - 1);
+  const col = {};
+  for (const n of Object.values(state.circuit.nodes)) {
+    col[n.id] = sim.traces[n.id]?.[state.clockTick] ?? 0;
+  }
+  liveSim = { nodeOutputs: col, status: sim.status === "OK" ? "STABLE" : sim.status };
+  if (sim.status !== "OK") {
+    setStatus("⚠ Comb feedback loop — break it with a clocked part (flops isolate loops).");
+  }
+  return liveSim;
+}
+
+function stopClock() {
+  if (clockTimer) {
+    clearInterval(clockTimer);
+    clockTimer = null;
+    const btn = document.querySelector("#t-play");
+    if (btn) {
+      btn.textContent = "▶";
+      btn.setAttribute("aria-pressed", "false");
+    }
+  }
+}
+
 function afterMutation(opts = { structural: true }) {
-  runLiveSim();
+  if (inClockedBench()) runClockedSim();
+  else runLiveSim();
   renderPalette();
   renderNodes();
   renderWires();
@@ -661,14 +807,27 @@ function currentInputVector() {
 
 function renderSpec() {
   const isChallenge = state.mode === "challenge";
-  $("#spec-challenge").hidden = !isChallenge;
-  $("#spec-sandbox").hidden = isChallenge;
+  const isClocked = state.mode === "clocked";
+  $("#spec-challenge").hidden = !(isChallenge || isClocked);
+  $("#spec-sandbox").hidden = isChallenge || isClocked;
   // restore shared spec chrome other modes may have changed
   document.querySelector("#spec-challenge .check-row").style.display = "";
   document.querySelector("#spec-challenge .table-wrap").style.display = "";
   document.querySelector("#spec-challenge h3").style.display = "";
   document.querySelector("#xfer-wrap").style.display = "none";
-  if (isChallenge) {
+  $("#trace-view").hidden = !inClockedBench();
+  if (inClockedBench()) $("#expr-toggle").style.display = "none";
+  if (isClocked) {
+    const level = clockedLevel();
+    $("#level-name").textContent = `K${state.levelIndex + 1}. ${level.name}`;
+    $("#level-brief").textContent = level.briefing;
+    const budget = Object.entries(level.allowed)
+      .map(([t, n]) => `${t}×${n}`)
+      .join(" · ") || "clock + wires";
+    $("#level-budget").textContent = `Budget: ${budget} · Par: ${level.par} parts · Parts used: ${countGates(state.circuit)} · ${level.ticks} ticks`;
+    renderClockedTable();
+    renderTraces();
+  } else if (isChallenge) {
     const level = currentLevel();
     $("#level-name").textContent = `${state.levelIndex + 1}. ${level.name}`;
     $("#level-brief").textContent = level.briefing;
@@ -678,9 +837,16 @@ function renderSpec() {
     $("#level-budget").textContent = `Budget: ${budget} · Par: ${level.par} gates · Gates used: ${countGates(state.circuit)}`;
     renderTruthTable();
   } else {
-    $("#sandbox-info").textContent = `Gates: ${countGates(state.circuit)} · Wires: ${Object.keys(state.circuit.wires).length}${
-      liveSim?.status === "UNSTABLE" ? " · ⚠ feedback loop (combinational only)" : ""
-    }`;
+    if (inClockedBench()) {
+      $("#sandbox-info").textContent = `Parts: ${countGates(state.circuit)} · Wires: ${Object.keys(state.circuit.wires).length}${
+        liveSim?.status && liveSim.status !== "STABLE" ? ` · ⚠ ${liveSim.status}` : ""
+      } · ${clockTicks()} ticks`;
+      renderTraces();
+    } else {
+      $("#sandbox-info").textContent = `Gates: ${countGates(state.circuit)} · Wires: ${Object.keys(state.circuit.wires).length}${
+        liveSim?.status === "UNSTABLE" ? " · ⚠ feedback loop (combinational only)" : ""
+      }`;
+    }
   }
   renderExprView();
 }
@@ -801,7 +967,158 @@ function renderKmapHint() {
   details.hidden = false;
 }
 
+// ---------- Clocked spec / traces / transport ----------
+
+function waveStr(wave) {
+  return wave.map((b) => (b ? "▅" : "▁")).join("");
+}
+
+function renderClockedTable() {
+  const level = clockedLevel();
+  const table = $("#truth-table");
+  table.innerHTML = "";
+  const head = document.createElement("tr");
+  const th0 = document.createElement("th");
+  th0.textContent = "case";
+  head.appendChild(th0);
+  for (const n of [...level.inputs, ...(level.clocks ?? [])]) {
+    const th = document.createElement("th");
+    th.textContent = `${n} in`;
+    head.appendChild(th);
+  }
+  for (const n of level.probes) {
+    const th = document.createElement("th");
+    th.textContent = `${n} exp`;
+    head.appendChild(th);
+  }
+  if (state.lastResults) {
+    const r = document.createElement("th");
+    r.textContent = "check";
+    head.appendChild(r);
+  }
+  table.appendChild(head);
+  const resByIdx = new Map((state.lastResults ?? []).map((r, i) => [i, r]));
+  level.tests.forEach((t, i) => {
+    const tr = document.createElement("tr");
+    const td0 = document.createElement("td");
+    td0.textContent = `#${i + 1} (${t.ticks ?? level.ticks}t)`;
+    tr.appendChild(td0);
+    for (const n of [...level.inputs, ...(level.clocks ?? [])]) {
+      const td = document.createElement("td");
+      const v = t.in?.[n];
+      td.textContent = Array.isArray(v) ? waveStr(v) : String(v ?? "—");
+      tr.appendChild(td);
+    }
+    for (const n of level.probes) {
+      const td = document.createElement("td");
+      td.textContent = waveStr(t.expect[n] ?? []);
+      tr.appendChild(td);
+    }
+    if (state.lastResults) {
+      const rr = resByIdx.get(i);
+      const td = document.createElement("td");
+      td.textContent = rr?.ok ? "✓" : "✗";
+      td.className = rr?.ok ? "ok" : "bad";
+      tr.appendChild(td);
+    }
+    table.appendChild(tr);
+  });
+  const res = $("#check-results");
+  if (liveSim?.status && liveSim.status !== "STABLE") {
+    res.innerHTML = `<span class="warn">⚠ Combinational loop — break it with a clocked part.</span>`;
+  } else if (!state.lastResults) {
+    res.innerHTML = `<span class="muted">Press “Check solution” to run ${level.tests.length} scenario(s) over ${level.ticks} ticks.</span>`;
+  }
+}
+
+/** Lanes to draw: level clocks+inputs+probes, or all such terminals in sandbox. */
+function traceLanes() {
+  const ids = {};
+  if (state.mode === "clocked") {
+    const m = clockNameToId();
+    for (const n of clockedLevel().clocks ?? []) ids[n] = { id: m[n], color: "#fbbf24" };
+    for (const n of clockedLevel().inputs) ids[n] = { id: m[n], color: "#60a5fa" };
+    for (const n of clockedLevel().probes) ids[n] = { id: m[n], color: "#34d399" };
+  } else {
+    for (const n of Object.values(state.circuit.nodes)) {
+      if (n.type === "INPUT") ids[n.name ?? n.id] = { id: n.id, color: "#60a5fa" };
+      else if (n.type === "CLOCK") ids[n.name ?? n.id] = { id: n.id, color: "#fbbf24" };
+      else if (n.type === "OUTPUT") ids[n.name ?? n.id] = { id: n.id, color: "#34d399" };
+    }
+  }
+  return ids;
+}
+
+function renderTraces() {
+  const svg = $("#traces");
+  if (!svg) return;
+  svg.innerHTML = "";
+  const ticks = clockTicks();
+  const lanes = traceLanes();
+  const names = Object.keys(lanes);
+  const labelW = 52, px = 26, laneH = 26, padTop = 6;
+  const Wpx = labelW + ticks * px + 12;
+  const Hpx = padTop + names.length * laneH + 8;
+  svg.setAttribute("viewBox", `0 0 ${Wpx} ${Hpx}`);
+  svg.style.minWidth = `${Wpx}px`;
+  const X = (t) => labelW + t * px;
+  names.forEach((name, li) => {
+    const y0 = padTop + li * laneH;
+    const yHi = y0 + 5, yLo = y0 + 19;
+    const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    t.setAttribute("x", "4");
+    t.setAttribute("y", String(y0 + 16));
+    t.setAttribute("fill", "#93a3c4");
+    t.setAttribute("font-size", "12");
+    t.textContent = name;
+    svg.appendChild(t);
+    const wave = state.clockTraces?.[lanes[name].id] ?? [];
+    let d = "";
+    for (let i = 0; i < ticks; i++) {
+      const v = wave[i] ? 1 : 0;
+      const y = v ? yHi : yLo;
+      const x0 = X(i), x1 = X(i + 1);
+      const prevY = i === 0 ? y : ((wave[i - 1] ? yHi : yLo));
+      d += `${i === 0 ? `M${x0} ${y}` : `L${x0} ${prevY}L${x0} ${y}`}L${x1} ${y}`;
+    }
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", d);
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", lanes[name].color);
+    path.setAttribute("stroke-width", "2.5");
+    svg.appendChild(path);
+  });
+  // playhead
+  const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  line.setAttribute("x1", String(X(state.clockTick)));
+  line.setAttribute("x2", String(X(state.clockTick)));
+  line.setAttribute("y1", "0");
+  line.setAttribute("y2", String(Hpx));
+  line.setAttribute("stroke", "#e8eefc");
+  line.setAttribute("stroke-width", "1.5");
+  line.setAttribute("stroke-dasharray", "3 3");
+  svg.appendChild(line);
+  // transport chrome
+  const scrub = $("#t-scrub");
+  scrub.max = String(ticks - 1);
+  scrub.value = String(state.clockTick);
+  $("#t-label").textContent = `t=${state.clockTick}/${ticks - 1}`;
+}
+
+/** Show one recorded tick column on the bench lamps/wires. */
+function renderTickColumn() {
+  const col = {};
+  for (const n of Object.values(state.circuit.nodes)) {
+    col[n.id] = state.clockTraces?.[n.id]?.[state.clockTick] ?? 0;
+  }
+  liveSim = { nodeOutputs: col, status: "STABLE" };
+  renderNodes();
+  renderWires();
+  renderTraces();
+}
+
 function checkSolution() {
+  if (state.mode === "clocked") return checkClocked();
   const level = currentLevel();
   const { passed, results, unstable } = evaluateLevel(
     state.circuit,
@@ -842,6 +1159,47 @@ function checkSolution() {
   renderPalette();
 }
 
+function checkClocked() {
+  const level = clockedLevel();
+  const { passed, results, error } = evaluateClocked(state.circuit, level, clockNameToId());
+  state.lastResults = results;
+  const parts = countGates(state.circuit);
+  const res = $("#check-results");
+  if (error) {
+    res.innerHTML = `<span class="fail">✗ Cannot check — ${error}.</span>`;
+    return;
+  }
+  const fails = results.filter((r) => !r.ok);
+  if (passed) {
+    const stars = starsFor(level, parts);
+    res.innerHTML = `<span class="pass">✓ Solved! ${"★".repeat(stars)}${"☆".repeat(3 - stars)} (${parts} parts, par ${level.par})</span>`;
+    const cs = save.clocked;
+    cs.stars[level.id] = Math.max(cs.stars[level.id] ?? 0, stars);
+    cs.unlocked = Math.max(cs.unlocked, Math.min(LEVELS_CLOCKED.length, state.levelIndex + 2));
+    persistSave(save);
+    renderLevels();
+    setStatus(`Level solved with ${stars} stars.`);
+    if (state.levelIndex + 1 < LEVELS_CLOCKED.length) {
+      const btn = document.createElement("button");
+      btn.className = "btn primary";
+      btn.textContent = "Next level →";
+      btn.addEventListener("click", () => loadClocked(state.levelIndex + 1));
+      res.appendChild(document.createTextNode(" "));
+      res.appendChild(btn);
+    }
+  } else {
+    const f = fails[0];
+    const d = f.diffs[0] ?? {};
+    const msg = d.status
+      ? `the circuit didn't settle (combinational loop at tick ${d.tick}).`
+      : `${fails.length} of ${results.length} scenarios fail. First: probe ${d.probe} differs at t=${d.tick} (expected ${d.expected}, got ${d.actual}).`;
+    res.innerHTML = `<span class="fail">✗ Not yet — ${msg}</span>`;
+    setStatus("Check failed. Scrub the traces to the failing tick.");
+  }
+  renderClockedTable();
+  renderPalette();
+}
+
 // ---------- Level select ----------
 
 function syncTabs() {
@@ -849,11 +1207,36 @@ function syncTabs() {
   $("#mode-sandbox").classList.toggle("active", state.mode === "sandbox");
   $("#mode-cmos").classList.toggle("active", state.mode === "cmos");
   $("#mode-analog").classList.toggle("active", state.mode === "analog");
+  $("#mode-clocked").classList.toggle("active", state.mode === "clocked");
 }
 
 function renderLevels() {
   // mode tabs always reflect app state
   syncTabs();
+  if (state.mode === "clocked") {
+    const list = $("#level-list");
+    list.innerHTML = "";
+    const h = document.createElement("div");
+    h.className = "lvl-chapter";
+    h.textContent = "Clocked";
+    list.appendChild(h);
+    const cs = save.clocked;
+    LEVELS_CLOCKED.forEach((level, i) => {
+      const locked = i + 1 > cs.unlocked && !save.freePlay;
+      const card = document.createElement("button");
+      card.className = "level-card" + (i === state.levelIndex ? " active" : "");
+      card.disabled = locked;
+      const stars = cs.stars[level.id] ?? 0;
+      card.innerHTML = `<span class="lvl-num">${locked ? "🔒" : `K${i + 1}`}</span>
+        <span class="lvl-name">${level.name}</span>
+        <span class="lvl-stars">${"★".repeat(stars)}${"☆".repeat(3 - stars)}</span>
+        <span class="lvl-tag">${level.tag}</span>`;
+      card.setAttribute("aria-label", `${locked ? "Locked" : ""} Clocked level ${i + 1}: ${level.name}`);
+      if (!locked) card.addEventListener("click", () => loadClocked(i));
+      list.appendChild(card);
+    });
+    return;
+  }
   if (state.mode === "cmos") {
     cmos().renderLevelList();
     return;
@@ -916,10 +1299,14 @@ function bindGlobal() {
     if (b === "analog") { analog().onReset(); return; }
     if (state.mode === "challenge") loadLevel(state.levelIndex);
     else {
+      stopClock();
       state.circuit = createCircuit();
       state.inputIds = [];
       state.outputIds = [];
+      state.clockIds = [];
       state.inputStates = {};
+      state.clockTick = 0;
+      state.clockTraces = null;
       afterMutation();
     }
   });
@@ -966,13 +1353,45 @@ function bindGlobal() {
     state.mode = "cmos";
     save.mode = "cmos";
     persistSave(save);
+    stopClock();
     cmos().enter();
   });
   $("#mode-analog").addEventListener("click", () => {
     state.mode = "analog";
     save.mode = "analog";
     persistSave(save);
+    stopClock();
     analog().enter();
+  });
+  $("#mode-clocked").addEventListener("click", () => {
+    state.mode = "clocked";
+    save.mode = "clocked";
+    persistSave(save);
+    loadClocked(Math.min(state.levelIndex, save.clocked.unlocked - 1));
+  });
+  // trace transport (clocked bench only)
+  $("#t-run").addEventListener("click", () => {
+    if (!inClockedBench()) return;
+    state.clockTick = clockTicks() - 1;
+    afterMutation();
+  });
+  $("#t-play").addEventListener("click", () => {
+    if (!inClockedBench()) return;
+    if (clockTimer) { stopClock(); return; }
+    const btn = $("#t-play");
+    btn.textContent = "⏸";
+    btn.setAttribute("aria-pressed", "true");
+    clockTimer = setInterval(() => {
+      state.clockTick = (state.clockTick + 1) % clockTicks();
+      if (state.clockTick === 0) { stopClock(); }
+      renderTickColumn();
+    }, 450);
+  });
+  $("#t-scrub").addEventListener("input", (e) => {
+    if (!inClockedBench()) return;
+    stopClock();
+    state.clockTick = Math.max(0, Math.min(clockTicks() - 1, parseInt(e.target.value, 10) || 0));
+    renderTickColumn();
   });
   const free = $("#freeplay");
   free.checked = save.freePlay === true;
@@ -990,7 +1409,8 @@ function bindGlobal() {
 }
 
 function renderAll() {
-  runLiveSim();
+  if (inClockedBench()) runClockedSim();
+  else runLiveSim();
   renderLevels();
   renderPalette();
   renderNodes();
@@ -998,8 +1418,12 @@ function renderAll() {
   renderSpec();
   updateDeleteBtn();
   fitStage();
-  const place = state.mode === "challenge" ? `Level ${state.levelIndex + 1} of ${LEVELS.length}` : "Sandbox — everything unlocked";
-  setStatus(`${place}. Click any pin, then the other end, to wire. INPUT terminals are left, OUTPUT terminals are right.`);
+  const place = state.mode === "clocked"
+    ? `K-level ${state.levelIndex + 1} of ${LEVELS_CLOCKED.length}`
+    : state.mode === "challenge"
+      ? `Level ${state.levelIndex + 1} of ${LEVELS.length}`
+      : "Sandbox — everything unlocked";
+  setStatus(`${place}. Click any pin, then the other end, to wire.`);
 }
 
 // boot: restore the last-used mode
@@ -1010,6 +1434,8 @@ if (save.mode === "cmos") {
 } else if (save.mode === "analog") {
   state.mode = "analog";
   analog().enter();
+} else if (save.mode === "clocked") {
+  loadClocked(0);
 } else if (save.mode === "sandbox") {
   loadSandbox();
 } else if (state.mode === "challenge") loadLevel(0);

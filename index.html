@@ -13,6 +13,7 @@
       <button id="mode-challenge" class="mode-btn">Gates</button>
       <button id="mode-cmos" class="mode-btn">CMOS Lab</button>
       <button id="mode-analog" class="mode-btn">Op-Amp Lab</button>
+      <button id="mode-clocked" class="mode-btn">Clocked</button>
       <button id="mode-sandbox" class="mode-btn">Sandbox</button>
     </nav>
     <div class="top-actions">
@@ -55,6 +56,15 @@
           <div id="nodes"></div>
         </div>
       </div>
+      </div>
+      <div id="trace-view" class="trace-view" hidden>
+        <div class="trace-toolbar">
+          <button id="t-run" class="btn">Run</button>
+          <button id="t-play" class="btn" aria-pressed="false">▶</button>
+          <input id="t-scrub" type="range" min="0" max="7" step="1" value="7" aria-label="Tick scrubber" />
+          <span id="t-label" class="muted">t=7</span>
+        </div>
+        <div class="trace-scroll"><svg id="traces" role="img" aria-label="Signal traces"></svg></div>
       </div>
       <div id="expr-view" class="expr-view" hidden aria-live="polite"></div>
     </section>
@@ -118,6 +128,12 @@
         <li>Golden rules: <b>V+ ≈ V−</b> (until the output hits the <b>±11V</b> rails)</li>
         <li>Non-inverting gain <b>1+Rf/R1</b> · inverting gain <b>−Rf/Rin</b></li>
         <li>Every source needs a <b>ground return</b> · click a <b>resistor</b> to step 1k→10k→100k · drag a <b>source slider</b> to play</li>
+      </ul>
+      <h3>Clocked cheat-sheet</h3>
+      <ul class="cheat">
+        <li><b>DFF</b> copies D→Q on the rising edge · <b>TFF</b> toggles when T=1 · <b>latch</b> follows while EN=1 · <b>Δ1</b> delays one tick</li>
+        <li>Click a <b>CLOCK</b> to cycle period 2→4→8 · HI inputs are your logic-high (toggle to 1)</li>
+        <li>Feedback through an edge is legal; pure combinational loops still fail</li>
       </ul>
       <button id="help-close" class="btn primary">Got it</button>
     </div>

@@ -12,7 +12,7 @@ export function loadSave() {
     const data = JSON.parse(raw);
     if (!data || typeof data !== "object") return defaultSave();
     return {
-      unlocked: Math.max(1, Math.min(99, data.unlocked | 0 || 1)),
+      unlocked: Math.max(1, Math.min(500, data.unlocked | 0 || 1)),
       stars: data.stars && typeof data.stars === "object" ? data.stars : {},
       sandbox: data.sandbox ?? null,
     };

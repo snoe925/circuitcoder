@@ -2,20 +2,10 @@
  * Level catalogue. Truth tables are generated programmatically so they
  * cannot drift from the spec functions.
  */
+import { allCombos, buildTests } from "./engine.js";
+import { LEVELS_PACK2 } from "./pack2.js";
 
-export function allCombos(n) {
-  const rows = [];
-  for (let i = 0; i < 2 ** n; i++) {
-    const row = [];
-    for (let b = n - 1; b >= 0; b--) row.push((i >> b) & 1);
-    rows.push(row);
-  }
-  return rows;
-}
-
-function buildTests(nInputs, fn) {
-  return allCombos(nInputs).map((inp) => ({ in: inp, out: fn(inp) }));
-}
+export { allCombos, buildTests };
 
 const xor2 = ([a, b]) => [a ^ b];
 const specNot = ([a]) => [a ? 0 : 1];
@@ -34,7 +24,7 @@ const specEq2 = ([a1, a0, b1, b0]) => [
   a1 === b1 && a0 === b0 ? 1 : 0,
 ];
 
-export const LEVELS = [
+const LEVELS_PACK1 = [
   {
     id: "not",
     name: "NOT Trader",
@@ -187,3 +177,7 @@ export function starsFor(level, gatesUsed) {
   if (gatesUsed <= level.par + 2) return 2;
   return 1;
 }
+
+/** Full campaign: Pack 1 (12) + Pack 2 N01–N100. */
+for (const l of LEVELS_PACK1) l.chapter ??= "Pack 1 · First Sparks";
+export const LEVELS = [...LEVELS_PACK1, ...LEVELS_PACK2];

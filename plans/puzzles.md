@@ -1,4 +1,8 @@
-# New Puzzles Plan (Pack 2 + Expert Annex)
+# Pack 2 proposal (alternate sketches — mostly superseded)
+
+> NOTE: implemented instead was `plans/puzzles2.md` (100 puzzles N01–N100,
+> shipped as levels 13–112 in `src/pack2.js`). This doc is kept for its
+> alternate briefings and the v2 teaser section below.
 
 Proposed follow-up content for Circuit Coder. All puzzles are designed for the
 **current engine** (combinational only, 2-input gates, `evaluateLevel` with

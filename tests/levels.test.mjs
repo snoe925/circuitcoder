@@ -163,10 +163,13 @@ function buildReference(levelId) {
   }
 }
 
-describe("levels catalogue", () => {
+describe("levels catalogue (Pack 1)", () => {
+  // Pack 1 = the 12 original levels (chapter tag); Pack 2 (N01–N100) is
+  // covered by tests/pack2.test.mjs.
+  const PACK1 = LEVELS.filter((l) => l.chapter.startsWith("Pack 1"));
   it("has 12 levels with exhaustive tests and sane budgets", () => {
-    assert.equal(LEVELS.length, 12);
-    for (const l of LEVELS) {
+    assert.equal(PACK1.length, 12);
+    for (const l of PACK1) {
       assert.ok(l.id && l.name && l.briefing);
       assert.ok(l.inputs.length >= 1 && l.outputs.length >= 1);
       assert.equal(l.tests.length, 2 ** l.inputs.length);
@@ -182,7 +185,7 @@ describe("levels catalogue", () => {
   });
 
   it("every level is solvable within budget (reference solutions pass)", () => {
-    for (const level of LEVELS) {
+    for (const level of PACK1) {
       const { circuit, inputIds, outputIds } = buildReference(level.id);
       const gates = countGates(circuit);
       // budget check

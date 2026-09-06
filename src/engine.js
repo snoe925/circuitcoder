@@ -119,6 +119,22 @@ export function setInputWire(circuit, fromId, toId, toPin = 0, fromPin = 0) {
   return addWire(circuit, fromId, toId, toPin, fromPin);
 }
 
+/** All n-bit input combinations, MSB first. */
+export function allCombos(n) {
+  const rows = [];
+  for (let i = 0; i < 2 ** n; i++) {
+    const row = [];
+    for (let b = n - 1; b >= 0; b--) row.push((i >> b) & 1);
+    rows.push(row);
+  }
+  return rows;
+}
+
+/** Build exhaustive [{in, out}] tests from a spec function. */
+export function buildTests(nInputs, fn) {
+  return allCombos(nInputs).map((inp) => ({ in: inp, out: fn(inp) }));
+}
+
 /** Boolean function of a gate given its input bits (array of 0|1). */
 export function computeGate(type, inputs) {
   const b = inputs.map((v) => (v ? 1 : 0));

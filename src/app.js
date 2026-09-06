@@ -82,6 +82,28 @@ function loadLevel(index) {
     const n = addNode(c, "OUTPUT", W - NODE_W - 30, 50 + i * 100, { locked: true, name });
     state.outputIds.push(n.id);
   });
+  // Debug-ward prefill: pre-placed (possibly buggy) gates + wires.
+  // Placed directly (bypassing validation) since level data is trusted —
+  // e.g. a self-loop wire that the UI could never create.
+  if (level.prefill) {
+    const keyToId = {};
+    state.inputIds.forEach((id, i) => (keyToId[`in${i}`] = id));
+    state.outputIds.forEach((id, i) => (keyToId[`out${i}`] = id));
+    for (const n of level.prefill.nodes ?? []) {
+      const node = addNode(c, n.type, n.x, n.y, {});
+      keyToId[n.key] = node.id;
+    }
+    for (const w of level.prefill.wires ?? []) {
+      const wid = `w${c.seq++}`;
+      c.wires[wid] = {
+        id: wid,
+        from: keyToId[w.from],
+        fromPin: 0,
+        to: keyToId[w.to],
+        toPin: w.toPin ?? 0,
+      };
+    }
+  }
   // Spread terminals vertically centered when few
   state.circuit = c;
   state.spawnOffset = 0;
@@ -705,7 +727,15 @@ function checkSolution() {
 function renderLevels() {
   const list = $("#level-list");
   list.innerHTML = "";
+  let lastChapter = null;
   LEVELS.forEach((level, i) => {
+    if (level.chapter !== lastChapter) {
+      lastChapter = level.chapter;
+      const h = document.createElement("div");
+      h.className = "lvl-chapter";
+      h.textContent = level.chapter ?? `Levels`;
+      list.appendChild(h);
+    }
     const locked = i + 1 > save.unlocked && state.mode === "challenge";
     const card = document.createElement("button");
     card.className = "level-card" + (i === state.levelIndex && state.mode === "challenge" ? " active" : "");

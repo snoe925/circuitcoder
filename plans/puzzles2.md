@@ -128,7 +128,7 @@ Single gates to place, wider AND/OR chains, and the two forgotten gates.
 | N72 | `inc4` | Nibble Incrementer | XOR ×3, AND ×2, NOT ×1 | 6 | +1 on 4 bits: s0=¬b0, s1=b1⊕b0, t1=b1∧b0, s2=b2⊕t1, t2=t1∧b2, s3=b3⊕t2 |
 | N73 | `addsub2` | 2-bit Subtractor | XOR ×3, AND ×3, NOT ×3, OR ×1 | 10 | Half-sub bit0 + full-sub bit1 |
 | N74 | `mul2` | 2×2 Multiplier | AND ×6, XOR ×2 | 8 | 4 partial products + HA-style combine (m1,m2,m3) |
-| N75 | `add3s` | 3-bit Adder (`sampled`) | AND ×4, OR ×2, XOR ×5 | 12 | HA+FA+FA; 24 hand-picked vectors (exhaustive 64 is too many table rows) |
+| N75 | `add3s` | 3-bit Adder (sampled) | AND ×5, OR ×2, XOR ×5 | 12 | HA+FA+FA; 24 hand-picked vectors (exhaustive 64 is too many table rows) |
 
 ## H. Codes & detectors (N76–N90)
 
@@ -136,9 +136,9 @@ Single gates to place, wider AND/OR chains, and the two forgotten gates.
 |---|----|------|---------|-----|------|
 | N76 | `gray2` | Gray Code (2-bit) | XOR ×1 | 1 | g1=b1 (wire), g0=b1⊕b0 |
 | N77 | `gray3` | Gray Code (3-bit) | XOR ×2 | 2 | g2=b2, g1=b2⊕b1, g0=b1⊕b0 |
-| N78 | `parity3` | Odd Parity (3-bit) | XOR ×2 | 2 | P=A⊕B⊕C (remix of N31 with new briefing — keep one, see note) |
-| N79 | `parity4` | Nibble Parity | XOR ×3 | 3 | (remix of N33 — keep one, see note) |
-| N80 | `parity5` | 5-bit Parity | XOR ×4 | 4 | 32 exhaustive rows |
+| N78 | `even3` | Evenness of 3 (XOR box) | XOR ×2, NOT ×1 | 3 | ¬(A⊕B⊕C), tighter box than N32 |
+| N79 | `xnor4chain` | XNOR Chain | XNOR ×3 | 3 | ((A⊙B)⊙C)⊙D cascade |
+| N80 | `busparity` | Bus Parity | XOR ×4 | 4 | Odd parity over a 5-wire bus (sister briefing to N34) |
 | N81 | `onehot3` | Exactly-One Detector | XOR ×2, AND ×4, OR ×2, NOT ×1 | 9 | Y = parity ∧ ¬(any pair): (A⊕B⊕C)∧¬((A∧B)∨(A∧C)∨(B∧C)) |
 | N82 | `zero4` | All-Zero Detector | OR ×3, NOT ×1 | 4 | Y=1 iff ABCD=0000 (NOR4) |
 | N83 | `allone4` | All-One Detector | AND ×3 | 3 | Y=1 iff ABCD=1111 |
@@ -151,11 +151,8 @@ Single gates to place, wider AND/OR chains, and the two forgotten gates.
 | N90 | `seg-g` | 7-seg G (BCD) | `custom-10` | ~6 | On for {2,3,4,5,6,8,9} |
 
 Notes: `custom-10` = BCD digits 0–9 as 10 hand-written test vectors
-(4-bit input, invalid codes 10–15 untested). N78/N79 intentionally overlap
-N31/N33 as "same circuit, new story" bonus levels — drop them if strict
-uniqueness is preferred (that would cut the count to 98; replacements:
-`even3` = XNOR3-with-XOR par 3, and `nor4` detector par 4 — wait, `nor4` =
-N82. Use `xnor4` chain? 4-bit XNOR cascade = 3 XNORs par 3. Fine.)
+(4-bit input, invalid codes 10–15 untested). Implemented with `busparity`
+instead of a third parity5 copy so all 100 ids are unique.
 
 ## I. Debug ward (N91–N100) — needs `prefill` support
 
@@ -165,7 +162,7 @@ change (verification is still truth-table based).
 
 | # | id | Name | Bug | Fix size |
 |---|----|------|-----|----------|
-| N91 | `dbg-not` | Broken Inverter | NOT output wired back to its own input (loop!) | Move 1 wire |
+| N91 | `dbg-not` | Broken Inverter | Output wire missing (input pre-wired) | Add 1 wire |
 | N92 | `dbg-swap` | AND/OR Swap | AND gate where OR belongs (L: OR task, prefilled AND) | Swap 1 gate |
 | N93 | `dbg-notmiss` | Missing Inverter | XOR built without the two NOTs (direct A,B into ANDs) | Add 2 NOTs + rewire |
 | N94 | `dbg-tied` | Tied Inputs | Both AND inputs fed by A (B left dangling) | Move 1 wire |

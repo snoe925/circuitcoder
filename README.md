@@ -1,8 +1,8 @@
 # Circuit Coder — browser remake
 
 An iPad-style logic-circuit challenge game for the browser. Build combinational
-circuits from gates, watch live signal flow, and solve 12 truth-table challenges
-plus a free sandbox. No dependencies, no build step.
+circuits from gates, watch live signal flow, and solve 112 truth-table
+challenges across 11 chapters plus a free sandbox. No dependencies, no build step.
 
 ## Play
 
@@ -18,11 +18,14 @@ npm run serve   # then open http://localhost:8000
 - Wires glow green for 1; lamps show 0/1 text too (color is never the only cue).
 - Progress + stars persist in `localStorage` (`circuitcoder.v1`).
 
-## Levels (12)
+## Levels (112)
 
-NOT → AND → OR → XOR-from-scratch → NAND-only XOR → NOR-only XOR → XNOR →
-Half Adder → Full Adder → 2:1 MUX → Majority → 2-bit Equality.
-Details: `plans/03-levels-progression.md`.
+Pack 1: NOT → AND → OR → XOR-from-scratch → NAND-only XOR → NOR-only XOR →
+XNOR → Half Adder → Full Adder → 2:1 MUX → Majority → 2-bit Equality.
+Pack 2 (N01–N100, `src/pack2.js`): Fluency → NAND/NOR Workshops → De Morgan &
+Parity → Everyday Logic stories → Routing → Arithmetic → Codes & Detectors →
+Seven Segments → Debug Ward (fix-the-circuit via `prefill`).
+Details: `plans/03-levels-progression.md`, `plans/puzzles.md`, `plans/puzzles2.md`.
 
 ## Code layout
 
@@ -30,7 +33,8 @@ Details: `plans/03-levels-progression.md`.
 index.html  css/styles.css
 src/engine.js  # pure simulation (tested, zero DOM)
 src/gates.js   # traditional ANSI gate symbols as inline SVG (tested)
-src/levels.js  # catalogue; truth tables generated, can't drift
+src/levels.js  # Pack 1 catalogue + campaign merge (tested)
+src/pack2.js   # Pack 2: N01–N100 catalogue (tested)
 src/store.js   # localStorage persistence
 src/app.js     # UI: palette/canvas/wiring/verification
 tests/engine.test.mjs  tests/levels.test.mjs
@@ -47,9 +51,10 @@ npm run test:all # both
 
 - `engine.test.mjs`: gate truth tables, unconnected→0, fanout, 100-gate chain,
   cycle→UNSTABLE, wire validation, serialize round-trip.
-- `levels.test.mjs`: every level has exhaustive tests; a coded reference
+- `levels.test.mjs`: Pack 1 — exhaustive tables; a coded reference
   solution for each level passes within budget at par (proves solvability);
   a wrong-circuit sanity check fails as expected.
+- `pack2.test.mjs`: same bar for all 100 Pack 2 levels (budgets, par, 3 stars).
 - `gates.test.mjs`: every gate renders an SVG sized to its node box with
   leads reaching the pins, bubbles only on inverters, XOR pre-curve present.
 - `e2e/game.spec.js` (Playwright, 10 tests): level locks, palette/truth-table

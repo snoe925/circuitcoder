@@ -30,14 +30,14 @@ async function solveLevel1(page) {
   return { inId, outId, notId };
 }
 
-test("level list shows 12 challenges with progression lock", async ({ page }) => {
+test("level list shows the full campaign with progression lock", async ({ page }) => {
   const cards = page.locator(".level-card");
-  await expect(cards).toHaveCount(12);
+  await expect(cards).toHaveCount(112);
   await expect(cards.nth(0)).toBeEnabled();
   await expect(cards.nth(0)).toContainText("NOT Trader");
   // Fresh save: only level 1 unlocked
   await expect(cards.nth(1)).toBeDisabled();
-  await expect(cards.nth(11)).toContainText("2-bit Equality");
+  await expect(cards.nth(111)).toContainText("Flipped Parity");
 });
 
 test("level 1 renders palette budget and truth table", async ({ page }) => {
@@ -195,6 +195,65 @@ test("narrow screens keep a usable canvas (scrolls instead of shrinking pins)", 
   expect(canvasWidth).toBeGreaterThanOrEqual(630);
   const pin = await page.locator(".pin.out").first().boundingBox();
   expect(pin.width).toBeGreaterThanOrEqual(12);
+});
+
+test("level select groups 112 levels into chapters", async ({ page }) => {
+  await expect(page.locator(".level-card")).toHaveCount(112);
+  const chapters = page.locator(".lvl-chapter");
+  await expect(chapters).toHaveCount(11);
+  await expect(page.locator(".lvl-chapter").first()).toContainText("Pack 1");
+});
+
+async function unlockAll(page) {
+  await page.evaluate(() =>
+    localStorage.setItem(
+      "circuitcoder.v1",
+      JSON.stringify({ unlocked: 500, stars: {}, sandbox: null })
+    )
+  );
+  await page.reload();
+  await expect(page.locator("#level-name")).not.toBeEmpty();
+}
+
+test("pack2 level solves end-to-end (Meet NAND)", async ({ page }) => {
+  await unlockAll(page);
+  await page.locator(".level-card", { hasText: "Meet NAND" }).click();
+  await expect(page.locator("#level-name")).toContainText("Meet NAND");
+  await page.locator('.pal-btn[data-type="NAND"]').click();
+  const ids = await page.locator("#nodes .node").evaluateAll((els) =>
+    els.map((e) => [e.dataset.id, e.className])
+  );
+  const idOf = (frag) => ids.find(([, c]) => c.includes(frag))[0];
+  const in0 = (await page.locator(".node.type-INPUT").evaluateAll((els) => els.map((e) => e.dataset.id)))[0];
+  void in0;
+  const inputs = await page.locator(".node.type-INPUT").evaluateAll((els) => els.map((e) => e.dataset.id));
+  const nand = idOf("type-NAND");
+  const out = idOf("type-OUTPUT");
+  await page.locator(`.node[data-id="${inputs[0]}"] .pin.out`).click();
+  await page.locator(`.node[data-id="${nand}"] .pin.in[data-pin="0"]`).click();
+  await page.locator(`.node[data-id="${inputs[1]}"] .pin.out`).click();
+  await page.locator(`.node[data-id="${nand}"] .pin.in[data-pin="1"]`).click();
+  await page.locator(`.node[data-id="${nand}"] .pin.out`).click();
+  await page.locator(`.node[data-id="${out}"] .pin.in[data-pin="0"]`).click();
+  await page.locator("#check-btn").click();
+  await expect(page.locator("#check-results")).toContainText("Solved!");
+});
+
+test("debug ward level loads its buggy prefill (unfinished wiring)", async ({ page }) => {
+  await unlockAll(page);
+  await page.locator(".level-card", { hasText: "Broken Inverter" }).click();
+  await expect(page.locator("#level-name")).toContainText("Broken Inverter");
+  await expect(page.locator(".node.type-NOT")).toHaveCount(1);
+  // The prefill is broken: checking now must fail
+  await page.locator("#check-btn").click();
+  await expect(page.locator("#check-results")).toContainText("Not yet");
+  // Finish the job: wire NOT -> Y
+  const not = (await page.locator(".node.type-NOT").evaluateAll((els) => els.map((e) => e.dataset.id)))[0];
+  const outp = (await page.locator(".node.type-OUTPUT").evaluateAll((els) => els.map((e) => e.dataset.id)))[0];
+  await page.locator(`.node[data-id="${not}"] .pin.out`).click();
+  await page.locator(`.node[data-id="${outp}"] .pin.in[data-pin="0"]`).click();
+  await page.locator("#check-btn").click();
+  await expect(page.locator("#check-results")).toContainText("Solved!");
 });
 
 test("reset button clears a placed gate", async ({ page }) => {

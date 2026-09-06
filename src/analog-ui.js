@@ -649,8 +649,8 @@ export function createAnalogUI(deps) {
     const as = asave();
     const pg = document.createElement("button");
     pg.className = "level-card playground" + (isPlayground() ? " active" : "");
-    pg.innerHTML = `<span class="lvl-num">⚗</span><span class="lvl-name">Playground</span><span class="lvl-stars"></span><span class="lvl-tag">free parts</span>`;
-    pg.setAttribute("aria-label", "Analog playground with free parts");
+    pg.innerHTML = `<span class="lvl-num">⚗</span><span class="lvl-name">Sandbox</span><span class="lvl-stars"></span><span class="lvl-tag">free parts, all parts</span>`;
+    pg.setAttribute("aria-label", "Analog sandbox with free parts");
     pg.addEventListener("click", loadPlayground);
     list.appendChild(pg);
     const h = document.createElement("div");
@@ -685,7 +685,7 @@ export function createAnalogUI(deps) {
     renderSegs();
     renderSpec();
     $("#delete-btn").disabled = !S.selected;
-    const place = isPlayground() ? "Analog Playground" : `Op-amp level ${S.levelIndex + 1} of ${LEVELS_ANALOG.length}`;
+    const place = isPlayground() ? "Analog Sandbox" : `Op-amp level ${S.levelIndex + 1} of ${LEVELS_ANALOG.length}`;
     setStatus(`${place}. Click any pin, then another pin, to wire. Click a resistor to change its value.`);
     fitStage();
   }

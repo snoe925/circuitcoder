@@ -684,8 +684,8 @@ export function createCmosUI(deps) {
     const cs = cmosSave();
     const pg = document.createElement("button");
     pg.className = "level-card playground" + (isPlayground() ? " active" : "");
-    pg.innerHTML = `<span class="lvl-num">⚗</span><span class="lvl-name">Playground</span><span class="lvl-stars"></span><span class="lvl-tag">free parts</span>`;
-    pg.setAttribute("aria-label", "CMOS playground with free parts");
+    pg.innerHTML = `<span class="lvl-num">⚗</span><span class="lvl-name">Sandbox</span><span class="lvl-stars"></span><span class="lvl-tag">free parts, all parts</span>`;
+    pg.setAttribute("aria-label", "CMOS sandbox with free parts");
     pg.addEventListener("click", loadPlayground);
     list.appendChild(pg);
     const h = document.createElement("div");
@@ -720,7 +720,7 @@ export function createCmosUI(deps) {
     renderSegs();
     renderSpec();
     $("#delete-btn").disabled = !S.selected;
-    const place = isPlayground() ? "CMOS Playground" : `CMOS level ${S.levelIndex + 1} of ${LEVELS_CMOS.length}`;
+    const place = isPlayground() ? "CMOS Sandbox" : `CMOS level ${S.levelIndex + 1} of ${LEVELS_CMOS.length}`;
     setStatus(`${place}. Click any pin, then another pin, to wire.`);
     fitStage();
   }

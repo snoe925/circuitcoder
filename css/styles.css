@@ -144,6 +144,17 @@ svg.gate { display: block; }
   background: #0b1122; border: 2px solid var(--off); color: var(--muted);
 }
 .node.on .node-lamp { background: #064e3b; border-color: var(--on); color: #d1fae5; box-shadow: 0 0 12px #34d39988; }
+/* Logic probe: oversized LED with an unmissable 0/1 — dark + hollow when off. */
+.node.tprobe .node-lamp.probe-led {
+  width: 44px; height: 44px; font-size: 20px;
+  border-width: 3px; border-style: dashed; border-color: var(--muted);
+  background: #05080f; color: var(--muted);
+}
+.node.tprobe.on .node-lamp.probe-led {
+  border-style: solid; border-color: var(--on);
+  background: #064e3b; color: #d1fae5;
+  box-shadow: 0 0 18px #34d399cc;
+}
 .type-INPUT, .type-OUTPUT { border-style: dashed; border-width: 2px; }
 .type-INPUT { border-color: var(--on); }
 .type-OUTPUT { border-color: var(--accent); }

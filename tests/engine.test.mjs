@@ -161,3 +161,34 @@ describe("circuit editing", () => {
     assert.throws(() => addNode(c, "FLIPFLOP", 0, 0));
   });
 });
+
+describe("PROBE (passive observer)", () => {
+  it("follows its input without driving anything", () => {
+    const c = createCircuit();
+    const a = addNode(c, "INPUT", 0, 0);
+    const g = addNode(c, "AND", 0, 0);
+    const y = addNode(c, "OUTPUT", 0, 0);
+    const p = addNode(c, "PROBE", 0, 0);
+    wire2(c, a.id, g.id, 0);
+    wire2(c, a.id, g.id, 1);
+    wire2(c, g.id, y.id, 0);
+    wire2(c, g.id, p.id, 0); // fan-out tap alongside the real output
+    for (const bit of [0, 1]) {
+      const s = simulate(c, { [a.id]: bit });
+      assert.equal(s.nodeOutputs[p.id], bit);
+      assert.equal(s.nodeOutputs[y.id], bit); // untouched by the probe
+    }
+  });
+
+  it("is free: excluded from gate counts, budgets and sources", () => {
+    const c = createCircuit();
+    const g = addNode(c, "AND", 0, 0);
+    addNode(c, "PROBE", 0, 0);
+    addNode(c, "PROBE", 0, 0);
+    assert.equal(countGates(c), 1);
+    const p = addNode(c, "PROBE", 0, 0);
+    const y = addNode(c, "OUTPUT", 0, 0);
+    assert.equal(validateWire(c, p.id, y.id, 0).ok, false); // no output pin
+    assert.equal(GATE_DEFS.PROBE.outputs, 0);
+  });
+});

@@ -30,11 +30,54 @@ const $ = (sel) => document.querySelector(sel);
 const save = loadSave();
 let showExpr = false;
 let cmosUI = null;
-const cmos = () => (cmosUI ??= createCmosUI({ $, save, persistSave }));
+const cmos = () => (cmosUI ??= createCmosUI({
+  $, save, persistSave, syncTabs,
+  renderPicker: renderSandboxPicker,
+  onChallenge: () => { state.mode = "cmos"; },
+}));
 let analogUI = null;
-const analog = () => (analogUI ??= createAnalogUI({ $, save, persistSave }));
-const inCmos = () => state.mode === "cmos";
-const inAnalog = () => state.mode === "analog";
+const analog = () => (analogUI ??= createAnalogUI({
+  $, save, persistSave, syncTabs,
+  renderPicker: renderSandboxPicker,
+  onChallenge: () => { state.mode = "analog"; },
+}));
+// Which bench owns the shared shell right now. Challenges map to their
+// bench; sandbox maps to the picked bench (master sandbox).
+const SANDBOX_BENCHES = [
+  { id: "gates", sym: "&", name: "Gates bench", tag: "logic gates, everything unlocked" },
+  { id: "cmos", sym: "T", name: "Transistor bench", tag: "CMOS parts, everything unlocked" },
+  { id: "analog", sym: "~", name: "Analog bench", tag: "op-amps, everything unlocked" },
+];
+const activeBench = () => {
+  if (state.mode === "sandbox") return save.sandboxBench;
+  if (state.mode === "cmos") return "cmos";
+  if (state.mode === "analog") return "analog";
+  return "gates";
+};
+function renderSandboxPicker() {
+  const list = $("#level-list");
+  list.innerHTML = "";
+  const h = document.createElement("div");
+  h.className = "lvl-chapter";
+  h.textContent = "Sandbox bench";
+  list.appendChild(h);
+  for (const b of SANDBOX_BENCHES) {
+    const card = document.createElement("button");
+    card.className = "level-card" + (save.sandboxBench === b.id ? " active" : "");
+    card.dataset.bench = b.id;
+    card.innerHTML = `<span class="lvl-num">${b.sym}</span>
+      <span class="lvl-name">${b.name}</span>
+      <span class="lvl-stars"></span>
+      <span class="lvl-tag">${b.tag}</span>`;
+    card.setAttribute("aria-label", `Sandbox on the ${b.name}`);
+    card.addEventListener("click", () => {
+      save.sandboxBench = b.id;
+      persistSave(save);
+      loadSandbox();
+    });
+    list.appendChild(card);
+  }
+}
 const state = {
   mode: "challenge",
   levelIndex: 0,
@@ -123,6 +166,10 @@ function loadLevel(index) {
 
 function loadSandbox() {
   state.mode = "sandbox";
+  save.mode = "sandbox";
+  persistSave(save);
+  if (save.sandboxBench === "cmos") { cmos().enterPlayground(); return; }
+  if (save.sandboxBench === "analog") { analog().enterPlayground(); return; }
   state.selected = null;
   state.pendingWire = null;
   state.lastResults = null;
@@ -152,11 +199,12 @@ function persistSandbox() {
 // so the palette offers gates only; disallowed ones show disabled instead of
 // vanishing (an almost-empty palette looks broken).
 const ALL_GATES = ["AND", "OR", "NOT", "NAND", "NOR", "XOR", "XNOR"];
-const ALL_PARTS = ["INPUT", "OUTPUT", ...ALL_GATES];
+const ALL_PARTS = ["INPUT", "OUTPUT", ...ALL_GATES, "PROBE"];
 
 function paletteEntries() {
+  // PROBE is a free measurement tool everywhere: unlimited, unbudgeted.
   if (state.mode === "sandbox") return ALL_PARTS;
-  return ALL_GATES;
+  return [...ALL_GATES, "PROBE"];
 }
 
 function usedCount(type) {
@@ -167,7 +215,7 @@ function renderPalette() {
   const el = $("#palette");
   el.innerHTML = "";
   $("#palette-label").textContent = state.mode === "sandbox" ? "Parts (all unlocked)" : "Parts (this level's budget)";
-  $("#palette-hint").textContent = "INPUT/OUTPUT terminals are pre-placed on the left/right — wire them up.";
+  $("#palette-hint").textContent = "INPUT/OUTPUT terminals are pre-placed on the left/right — wire them up. Clip a free PROBE onto any output to watch it live.";
   $("#expr-toggle").style.display = "";
   for (const type of paletteEntries()) {
     const btn = document.createElement("button");
@@ -175,7 +223,7 @@ function renderPalette() {
     btn.dataset.type = type;
     let remaining = Infinity;
     let available = true;
-    if (state.mode === "challenge") {
+    if (state.mode === "challenge" && type !== "PROBE") {
       const budget = currentLevel().allowed[type] ?? 0;
       available = budget > 0;
       remaining = budget - usedCount(type);
@@ -201,12 +249,15 @@ function renderPalette() {
 }
 
 function addGate(type) {
-  if (state.mode === "challenge") {
+  if (state.mode === "challenge" && type !== "PROBE") {
     const budget = currentLevel().allowed[type] ?? 0;
     if (usedCount(type) >= budget) return;
   }
-  const off = (state.spawnOffset++ % 8) * 14;
-  const n = addNode(state.circuit, type, W / 2 - NODE_W / 2 + off, H / 2 - 30 + off);
+  const gx = state.spawnOffset % 5, gy = Math.floor(state.spawnOffset / 5) % 3;
+  state.spawnOffset++;
+  const n = addNode(state.circuit, type,
+    Math.min(W - NODE_W - 10, 200 + gx * 140),
+    Math.min(H - 78, 110 + gy * 130));
   if (type === "INPUT") {
     state.inputStates[n.id] = 0;
     if (state.mode === "sandbox") state.inputIds.push(n.id);
@@ -244,6 +295,11 @@ function renderNodes() {
     } else if (node.type === "OUTPUT") {
       const v = liveSim ? liveSim.nodeOutputs[node.id] ?? 0 : 0;
       inner = `<div class="node-title">${node.name ?? "OUT"}</div><div class="node-lamp">${v ? "1" : "0"}</div>`;
+      div.classList.toggle("on", !!v);
+    } else if (node.type === "PROBE") {
+      const v = liveSim ? liveSim.nodeOutputs[node.id] ?? 0 : 0;
+      div.classList.add("tprobe");
+      inner = `<div class="node-title">PROBE</div><div class="node-lamp probe-led">${v ? "1" : "0"}</div>`;
       div.classList.toggle("on", !!v);
     } else {
       div.classList.add("tgate");
@@ -788,16 +844,30 @@ function checkSolution() {
 
 // ---------- Level select ----------
 
+function syncTabs() {
+  $("#mode-challenge").classList.toggle("active", state.mode === "challenge");
+  $("#mode-sandbox").classList.toggle("active", state.mode === "sandbox");
+  $("#mode-cmos").classList.toggle("active", state.mode === "cmos");
+  $("#mode-analog").classList.toggle("active", state.mode === "analog");
+}
+
 function renderLevels() {
-  if (inCmos()) {
+  // mode tabs always reflect app state
+  syncTabs();
+  if (state.mode === "cmos") {
     cmos().renderLevelList();
     return;
   }
-  if (inAnalog()) {
+  if (state.mode === "analog") {
     analog().renderLevelList();
     return;
   }
   const list = $("#level-list");
+  if (state.mode === "sandbox") {
+    // master sandbox: pick which bench to play on
+    renderSandboxPicker();
+    return;
+  }
   list.innerHTML = "";
   let lastChapter = null;
   LEVELS.forEach((level, i) => {
@@ -821,34 +891,29 @@ function renderLevels() {
     if (!locked) card.addEventListener("click", () => loadLevel(i));
     list.appendChild(card);
   });
-  // mode tabs
-  $("#mode-challenge").classList.toggle("active", state.mode === "challenge");
-  $("#mode-sandbox").classList.toggle("active", state.mode === "sandbox");
-  $("#mode-cmos").classList.toggle("active", inCmos());
-  $("#mode-analog").classList.toggle("active", inAnalog());
 }
 
 // ---------- Wiring ----------
 
 function bindGlobal() {
-  $("#check-btn").addEventListener("click", () => {
-    if (inCmos()) cmos().onCheck();
-    else if (inAnalog()) analog().onCheck();
-    else checkSolution();
-  });
-  $("#delete-btn").addEventListener("click", () => {
-    if (inCmos()) cmos().onDelete();
-    else if (inAnalog()) analog().onDelete();
-    else deleteSelected();
-  });
+  // Shared Check/Delete buttons follow whichever bench owns the shell.
+  const benchCall = (what) => {
+    const b = activeBench();
+    if (b === "cmos") return what === "check" ? cmos().onCheck() : cmos().onDelete();
+    if (b === "analog") return what === "check" ? analog().onCheck() : analog().onDelete();
+    return what === "check" ? checkSolution() : deleteSelected();
+  };
+  $("#check-btn").addEventListener("click", () => benchCall("check"));
+  $("#delete-btn").addEventListener("click", () => benchCall("del"));
   $("#expr-toggle").addEventListener("click", () => {
-    if (inCmos() || inAnalog()) return; // expressions are a gates-mode aid
+    if (activeBench() !== "gates") return; // expressions are a gates-mode aid
     showExpr = !showExpr;
     renderExprView();
   });
   $("#reset-btn").addEventListener("click", () => {
-    if (inCmos()) { cmos().onReset(); return; }
-    if (inAnalog()) { analog().onReset(); return; }
+    const b = activeBench();
+    if (b === "cmos") { cmos().onReset(); return; }
+    if (b === "analog") { analog().onReset(); return; }
     if (state.mode === "challenge") loadLevel(state.levelIndex);
     else {
       state.circuit = createCircuit();
@@ -863,8 +928,9 @@ function bindGlobal() {
       return;
     }
     if (e.target.closest("#canvas")) {
-      if (inCmos()) { cmos().onCanvasBackground(); return; }
-      if (inAnalog()) { analog().onCanvasBackground(); return; }
+      const b = activeBench();
+      if (b === "cmos") { cmos().onCanvasBackground(); return; }
+      if (b === "analog") { analog().onCanvasBackground(); return; }
       state.selected = null;
       state.pendingWire = null;
       renderNodes();
@@ -875,8 +941,9 @@ function bindGlobal() {
   window.addEventListener("resize", fitStage);
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
-      if (inCmos()) { cmos().onEscape(); return; }
-      if (inAnalog()) { analog().onEscape(); return; }
+      const b = activeBench();
+      if (b === "cmos") { cmos().onEscape(); return; }
+      if (b === "analog") { analog().onEscape(); return; }
       state.pendingWire = null;
       state.selected = null;
       renderNodes();
@@ -885,22 +952,26 @@ function bindGlobal() {
     }
     if ((e.key === "Delete" || e.key === "Backspace") && !/INPUT|TEXTAREA/.test(document.activeElement?.tagName ?? "")) {
       e.preventDefault();
-      if (inCmos()) cmos().onDelete();
-      else if (inAnalog()) analog().onDelete();
-      else deleteSelected();
+      benchCall("del");
     }
   });
   $("#mode-challenge").addEventListener("click", () => {
     state.mode = "challenge";
+    save.mode = "challenge";
+    persistSave(save);
     loadLevel(Math.min(state.levelIndex, save.unlocked - 1));
   });
   $("#mode-sandbox").addEventListener("click", loadSandbox);
   $("#mode-cmos").addEventListener("click", () => {
     state.mode = "cmos";
+    save.mode = "cmos";
+    persistSave(save);
     cmos().enter();
   });
   $("#mode-analog").addEventListener("click", () => {
     state.mode = "analog";
+    save.mode = "analog";
+    persistSave(save);
     analog().enter();
   });
   const free = $("#freeplay");
@@ -931,7 +1002,15 @@ function renderAll() {
   setStatus(`${place}. Click any pin, then the other end, to wire. INPUT terminals are left, OUTPUT terminals are right.`);
 }
 
-// boot
+// boot: restore the last-used mode
 bindGlobal();
-if (state.mode === "challenge") loadLevel(0);
+if (save.mode === "cmos") {
+  state.mode = "cmos";
+  cmos().enter();
+} else if (save.mode === "analog") {
+  state.mode = "analog";
+  analog().enter();
+} else if (save.mode === "sandbox") {
+  loadSandbox();
+} else if (state.mode === "challenge") loadLevel(0);
 else loadSandbox();

@@ -73,7 +73,7 @@ test("challenge palette always shows every gate (unavailable ones locked)", asyn
   page,
 }) => {
   const buttons = page.locator('#palette .pal-btn');
-  await expect(buttons).toHaveCount(7);
+  await expect(buttons).toHaveCount(8);
   await expect(page.locator('.pal-btn[data-type="NOT"]')).toBeEnabled();
   // AND is not part of level 1 — visible but locked, not vanished
   await expect(page.locator('.pal-btn[data-type="AND"]')).toBeDisabled();
@@ -151,7 +151,7 @@ test("rewiring an occupied input replaces the wire instead of duplicating", asyn
 test("sandbox mode unlocks all parts and can place gates", async ({ page }) => {
   await page.locator("#mode-sandbox").click();
   await expect(page.locator("#spec-sandbox")).toBeVisible();
-  await expect(page.locator(".pal-btn")).toHaveCount(9);
+  await expect(page.locator(".pal-btn")).toHaveCount(10);
   for (const t of ["AND", "XOR", "OUTPUT"]) {
     await expect(page.locator(`.pal-btn[data-type="${t}"]`)).toBeEnabled();
   }
@@ -344,13 +344,30 @@ test("NMOS switch solves with a resistor down to GND", async ({ page }) => {
   await expect(page.locator("#check-results")).toContainText("Solved!");
 });
 
-test("CMOS playground offers free parts", async ({ page }) => {
-  await page.locator("#mode-cmos").click();
-  await page.locator(".level-card.playground").click();
-  await expect(page.locator("#spec-sandbox")).toBeVisible();
+test("master sandbox switches benches and persists", async ({ page }) => {
+  await page.locator("#mode-sandbox").click();
+  await expect(page.locator(".level-card[data-bench]")).toHaveCount(3);
+  // transistor bench: free CMOS parts
+  await page.locator('.level-card[data-bench="cmos"]').click();
+  await expect(page.locator('.pal-btn[data-type="NMOS"]')).toBeEnabled();
   await expect(page.locator('.pal-btn[data-type="IN"]')).toBeEnabled();
   await page.locator('.pal-btn[data-type="NMOS"]').click();
   await expect(page.locator(".cdev.kind-NMOS")).toHaveCount(1);
+  // analog bench: free analog parts
+  await page.locator("#mode-sandbox").click();
+  await page.locator('.level-card[data-bench="analog"]').click();
+  await expect(page.locator('.pal-btn[data-type="VSRC"]')).toBeEnabled();
+  await page.locator('.pal-btn[data-type="OPAMP"]').click();
+  await expect(page.locator(".cdev.kind-OPAMP")).toHaveCount(1);
+  // gates bench still fine, and the pick persists across reload
+  await page.locator("#mode-sandbox").click();
+  await page.locator('.level-card[data-bench="gates"]').click();
+  await page.locator('.pal-btn[data-type="AND"]').click();
+  await expect(page.locator(".node.type-AND")).toHaveCount(1);
+  await page.reload();
+  await expect(page.locator("#mode-sandbox")).toHaveClass(/active/);
+  await expect(page.locator('.level-card[data-bench="gates"]')).toHaveClass(/active/);
+  await expect(page.locator(".node.type-AND")).toHaveCount(1);
 });
 
 test("Op-Amp Lab tab shows sources, rails and budgeted palette", async ({ page }) => {
@@ -381,15 +398,6 @@ test("Voltage follower solves end-to-end (place, wire, check)", async ({ page })
   await expect(page.locator("#check-results")).toContainText("Solved!");
   await expect(page.locator("#xfer path")).not.toHaveCount(0);
   await expect(page.locator(".level-card", { hasText: "Comparator" })).toBeEnabled();
-});
-
-test("Analog playground offers free parts", async ({ page }) => {
-  await page.locator("#mode-analog").click();
-  await page.locator(".level-card.playground").click();
-  await expect(page.locator("#spec-sandbox")).toBeVisible();
-  await expect(page.locator('.pal-btn[data-type="VSRC"]')).toBeEnabled();
-  await page.locator('.pal-btn[data-type="OPAMP"]').click();
-  await expect(page.locator(".cdev.kind-OPAMP")).toHaveCount(1);
 });
 
 test("free play opens every level and persists", async ({ page }) => {
@@ -436,6 +444,42 @@ test("mode tabs switch cleanly with exactly one active", async ({ page }) => {
     await expect(await activeCount()).toBe(1);
   }
   await expect(page.locator("#xfer-wrap")).toBeHidden();
+});
+
+test("logic probe watches a net live without affecting the solve", async ({ page }) => {
+  // sandbox: probe follows the input toggle, on and off states obvious
+  await page.locator("#mode-sandbox").click();
+  await page.locator('.pal-btn[data-type="INPUT"]').click();
+  await page.locator('.pal-btn[data-type="PROBE"]').click();
+  const inp = (await page.locator(".node.type-INPUT").evaluateAll((els) => els.map((e) => e.dataset.id)))[0];
+  const probe = (await page.locator(".node.type-PROBE").evaluateAll((els) => els.map((e) => e.dataset.id)))[0];
+  await page.locator(`.node[data-id="${inp}"] .pin.out`).click();
+  await page.locator(`.node[data-id="${probe}"] .pin.in[data-pin="0"]`).click();
+  const lamp = page.locator(".node.type-PROBE .probe-led");
+  await expect(lamp).toHaveText("0");
+  await expect(page.locator(".node.type-PROBE")).not.toHaveClass(/on/);
+  await page.locator(".node.type-INPUT").first().click();
+  await expect(lamp).toHaveText("1");
+  await expect(page.locator(".node.type-PROBE")).toHaveClass(/on/);
+});
+
+test("probes are free: unlimited and star-neutral in challenges", async ({ page }) => {
+  await page.locator('.pal-btn[data-type="NOT"]').click();
+  await page.locator('.pal-btn[data-type="PROBE"]').click();
+  await page.locator('.pal-btn[data-type="PROBE"]').click();
+  await expect(page.locator(".node.type-PROBE")).toHaveCount(2);
+  await expect(page.locator('.pal-btn[data-type="PROBE"]')).toBeEnabled();
+  // solve level 1 around the probes: A -> NOT -> Y, probe tapped on NOT
+  const inId = await page.locator(".node.type-INPUT").first().getAttribute("data-id");
+  const outId = await page.locator(".node.type-OUTPUT").first().getAttribute("data-id");
+  const notId = await page.locator(".node.type-NOT").getAttribute("data-id");
+  const probeId = await page.locator(".node.type-PROBE").first().getAttribute("data-id");
+  const wire = async (a, b) => { await a.click(); await b.click(); };
+  await wire(page.locator(`.node[data-id="${inId}"] .pin.out`), page.locator(`.node[data-id="${notId}"] .pin.in[data-pin="0"]`));
+  await wire(page.locator(`.node[data-id="${notId}"] .pin.out`), page.locator(`.node[data-id="${outId}"] .pin.in[data-pin="0"]`));
+  await wire(page.locator(`.node[data-id="${notId}"] .pin.out`), page.locator(`.node[data-id="${probeId}"] .pin.in[data-pin="0"]`));
+  await page.locator("#check-btn").click();
+  await expect(page.locator("#check-results")).toContainText("★★★");
 });
 
 test("reset button clears a placed gate", async ({ page }) => {

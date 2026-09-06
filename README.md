@@ -23,12 +23,12 @@ npm run serve   # then open http://localhost:8000
 
 ## Modes
 
-- **Gates:** 112 challenges (Pack 1 + Pack 2) + Sandbox.
+- **Gates:** 112 challenges (Pack 1 + Pack 2).
 - **CMOS Lab:** 12 challenges (rails → transistors → CMOS gates → DTL →
-  transmission gate → SR latch) + Sandbox. Transistors are
+  transmission gate → SR latch). Transistors are
   voltage-controlled switches: amber wires float, red means short.
 - **Op-Amp Lab:** 8 challenges (follower → comparator → amps → summer →
-  Schmitt → difference → clipping) + Sandbox. Ideal op-amps (±11V
+  Schmitt → difference → clipping). Ideal op-amps (±11V
   rails, tolerance-checked), gradient wires, voltmeter probes, transfer
   curve, source sliders, click-to-step resistors.
 

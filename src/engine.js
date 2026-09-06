@@ -24,6 +24,9 @@ export const GATE_DEFS = {
   NOR: { inputs: 2, outputs: 1, label: "NOR", symbol: "⊽" },
   XOR: { inputs: 2, outputs: 1, label: "XOR", symbol: "⊕" },
   XNOR: { inputs: 2, outputs: 1, label: "XNOR", symbol: "⊙" },
+  // PROBE is a passive observer: one input, no output, never drives the
+  // net it watches. Free measurement tool (no budget, no par cost).
+  PROBE: { inputs: 1, outputs: 0, label: "PROBE", symbol: "●" },
 };
 
 export const GATE_TYPES = Object.keys(GATE_DEFS);
@@ -208,7 +211,7 @@ export function simulate(circuit, inputValues = {}) {
     let changed = false;
     for (const n of nodes) {
       if (n.type === "INPUT") continue;
-      if (n.type === "OUTPUT") {
+      if (n.type === "OUTPUT" || n.type === "PROBE") {
         const v = readPin(n.id, 0, nodeOutputs);
         if (next[n.id] !== v) {
           next[n.id] = v;
@@ -267,10 +270,10 @@ export function evaluateLevel(circuit, level, inputIds, outputIds) {
   return { passed: results.every((r) => r.ok), results, unstable };
 }
 
-/** Count non-terminal gates (excludes INPUT/OUTPUT). */
+/** Count non-terminal gates (excludes INPUT/OUTPUT/PROBE). */
 export function countGates(circuit) {
   return Object.values(circuit.nodes).filter(
-    (n) => n.type !== "INPUT" && n.type !== "OUTPUT"
+    (n) => n.type !== "INPUT" && n.type !== "OUTPUT" && n.type !== "PROBE"
   ).length;
 }
 

@@ -100,7 +100,7 @@ function deviceInner(dev, probeText) {
 
 // ---------- controller ----------
 export function createAnalogUI(deps) {
-  const { $, save, persistSave } = deps;
+  const { $, save, persistSave, renderPicker, onChallenge, syncTabs } = deps;
   const asave = () => {
     save.analog ??= { unlocked: 1, stars: {}, playground: null };
     return save.analog;
@@ -111,6 +111,7 @@ export function createAnalogUI(deps) {
     inIds: [], probeIds: [],
     selected: null, pending: null, lastResults: null,
     spawn: 0, seq: 1,
+    showPicker: false, // true when hosted inside the master sandbox
   };
   let live = null; // { sim, endpointNet }
 
@@ -142,6 +143,7 @@ export function createAnalogUI(deps) {
 
   function loadLevel(index) {
     S.playground = false;
+    S.showPicker = false;
     S.levelIndex = Math.max(0, Math.min(LEVELS_ANALOG.length - 1, index));
     S.devices = {}; S.segs = {}; S.inputStates = {};
     S.inIds = []; S.probeIds = [];
@@ -153,6 +155,7 @@ export function createAnalogUI(deps) {
 
   function loadPlayground() {
     S.playground = true;
+    S.showPicker = true;
     S.selected = null; S.pending = null; S.lastResults = null;
     S.inIds = []; S.probeIds = []; S.inputStates = {};
     S.spawn = 0; S.seq = 1;
@@ -644,15 +647,10 @@ export function createAnalogUI(deps) {
 
   // ----- level list -----
   function renderLevelList() {
+    if (S.showPicker && renderPicker) { renderPicker(); return; }
     const list = $("#level-list");
     list.innerHTML = "";
     const as = asave();
-    const pg = document.createElement("button");
-    pg.className = "level-card playground" + (isPlayground() ? " active" : "");
-    pg.innerHTML = `<span class="lvl-num">⚗</span><span class="lvl-name">Sandbox</span><span class="lvl-stars"></span><span class="lvl-tag">free parts, all parts</span>`;
-    pg.setAttribute("aria-label", "Analog sandbox with free parts");
-    pg.addEventListener("click", loadPlayground);
-    list.appendChild(pg);
     const h = document.createElement("div");
     h.className = "lvl-chapter";
     h.textContent = "Op-Amp Lab";
@@ -668,16 +666,13 @@ export function createAnalogUI(deps) {
         <span class="lvl-stars">${"★".repeat(stars)}${"☆".repeat(3 - stars)}</span>
         <span class="lvl-tag">${lv.tag}</span>`;
       card.setAttribute("aria-label", `${locked ? "Locked" : ""} Op-amp level ${i + 1}: ${lv.name}`);
-      if (!locked) card.addEventListener("click", () => loadLevel(i));
+      if (!locked) card.addEventListener("click", () => { onChallenge?.(); loadLevel(i); });
       list.appendChild(card);
     });
-    for (const id of ["#mode-challenge", "#mode-sandbox", "#mode-cmos"]) {
-      document.querySelector(id)?.classList.remove("active");
-    }
-    document.querySelector("#mode-analog")?.classList.add("active");
   }
 
   function renderAll() {
+    syncTabs?.();
     live = buildLive();
     renderLevelList();
     renderPalette();
@@ -698,7 +693,7 @@ export function createAnalogUI(deps) {
 
   let resizeBound = false;
   return {
-    enter(index = 0) {
+    enter(index = S.levelIndex) {
       if (!resizeBound) { window.addEventListener("resize", fitStage); resizeBound = true; }
       loadLevel(Math.min(index, asave().unlocked - 1));
     },

@@ -154,7 +154,7 @@ function deviceInner(dev, lamp) {
 
 // ---------- controller ----------
 export function createCmosUI(deps) {
-  const { $, save, persistSave } = deps;
+  const { $, save, persistSave, renderPicker, onChallenge, syncTabs } = deps;
   const cmosSave = () => {
     save.cmos ??= { unlocked: 1, stars: {}, playground: null };
     return save.cmos;
@@ -170,8 +170,8 @@ export function createCmosUI(deps) {
     selected: null,  // { kind: 'dev'|'seg', id }
     pending: null,   // { dev, pin }
     lastResults: null,
-    spawn: 0,
-    seq: 1,
+    spawn: 0, seq: 1,
+    showPicker: false, // true when hosted inside the master sandbox
   };
   let live = null;
 
@@ -189,6 +189,7 @@ export function createCmosUI(deps) {
 
   function loadLevel(index) {
     S.playground = false;
+    S.showPicker = false;
     S.levelIndex = Math.max(0, Math.min(LEVELS_CMOS.length - 1, index));
     S.devices = {}; S.segs = {}; S.inputStates = {};
     S.inIds = []; S.probeIds = [];
@@ -221,6 +222,7 @@ export function createCmosUI(deps) {
 
   function loadPlayground() {
     S.playground = true;
+    S.showPicker = true;
     S.selected = null; S.pending = null; S.lastResults = null;
     S.inIds = []; S.probeIds = []; S.inputStates = {};
     S.spawn = 0; S.seq = 1;
@@ -679,15 +681,10 @@ export function createCmosUI(deps) {
 
   // ----- level list -----
   function renderLevelList() {
+    if (S.showPicker && renderPicker) { renderPicker(); return; }
     const list = $("#level-list");
     list.innerHTML = "";
     const cs = cmosSave();
-    const pg = document.createElement("button");
-    pg.className = "level-card playground" + (isPlayground() ? " active" : "");
-    pg.innerHTML = `<span class="lvl-num">⚗</span><span class="lvl-name">Sandbox</span><span class="lvl-stars"></span><span class="lvl-tag">free parts, all parts</span>`;
-    pg.setAttribute("aria-label", "CMOS sandbox with free parts");
-    pg.addEventListener("click", loadPlayground);
-    list.appendChild(pg);
     const h = document.createElement("div");
     h.className = "lvl-chapter";
     h.textContent = "CMOS Lab";
@@ -703,16 +700,13 @@ export function createCmosUI(deps) {
         <span class="lvl-stars">${"★".repeat(stars)}${"☆".repeat(3 - stars)}</span>
         <span class="lvl-tag">${lv.tag}</span>`;
       card.setAttribute("aria-label", `${locked ? "Locked" : ""} CMOS level ${i + 1}: ${lv.name}`);
-      if (!locked) card.addEventListener("click", () => loadLevel(i));
+      if (!locked) card.addEventListener("click", () => { onChallenge?.(); loadLevel(i); });
       list.appendChild(card);
     });
-    for (const id of ["#mode-challenge", "#mode-sandbox", "#mode-cmos", "#mode-analog"]) {
-      document.querySelector(id)?.classList.remove("active");
-    }
-    $("#mode-cmos").classList.add("active");
   }
 
   function renderAll() {
+    syncTabs?.();
     live = buildLive();
     renderLevelList();
     renderPalette();
@@ -733,7 +727,7 @@ export function createCmosUI(deps) {
 
   let resizeBound = false;
   return {
-    enter(index = 0) {
+    enter(index = S.levelIndex) {
       if (!resizeBound) { window.addEventListener("resize", fitStage); resizeBound = true; }
       loadLevel(Math.min(index, cmosSave().unlocked - 1));
     },

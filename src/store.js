@@ -3,7 +3,8 @@ const KEY = "circuitcoder.v1";
 
 export function defaultSave() {
   return {
-    unlocked: 1, stars: {}, sandbox: null, freePlay: false,
+    unlocked: 1, stars: {}, sandbox: null, freePlay: false, sandboxBench: "gates",
+    mode: "challenge",
     cmos: { unlocked: 1, stars: {}, playground: null },
     analog: { unlocked: 1, stars: {}, playground: null },
   };
@@ -27,6 +28,8 @@ export function loadSave() {
       stars: data.stars && typeof data.stars === "object" ? data.stars : {},
       sandbox: data.sandbox ?? null,
       freePlay: data.freePlay === true,
+      sandboxBench: ["gates", "cmos", "analog"].includes(data.sandboxBench) ? data.sandboxBench : "gates",
+      mode: ["challenge", "sandbox", "cmos", "analog"].includes(data.mode) ? data.mode : "challenge",
       cmos: sub(cmos),
       analog: sub(analog),
     };

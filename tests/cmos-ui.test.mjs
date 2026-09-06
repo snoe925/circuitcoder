@@ -17,6 +17,8 @@ describe("CMOS geometry", () => {
     assert.deepEqual(pinAnchor("NMOS", "A"), { x: 42, y: 0 });
     assert.deepEqual(pinAnchor("NMOS", "B"), { x: 42, y: 104 });
     assert.deepEqual(pinAnchor("DIODE", "K"), { x: 84, y: 26 });
+    assert.deepEqual(pinAnchor("RESISTOR", "A"), { x: 0, y: 22 });
+    assert.deepEqual(pinAnchor("RESISTOR", "B"), { x: 84, y: 22 });
     assert.deepEqual(pinAnchor("IN", "Y"), { x: 92, y: 26 });
     assert.deepEqual(pinAnchor("PROBE", "A"), { x: 0, y: 26 });
     assert.ok(CMOS_SIZE.NMOS.h === 104 && CMOS_SIZE.IN.w === 92);

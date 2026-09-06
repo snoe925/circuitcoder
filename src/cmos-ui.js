@@ -16,7 +16,7 @@ import { starsFor } from "./levels.js";
 
 export const CMOS_SIZE = {
   NMOS: { w: 84, h: 104 }, PMOS: { w: 84, h: 104 }, NPN: { w: 84, h: 104 },
-  DIODE: { w: 84, h: 52 }, PULLUP: { w: 72, h: 44 }, PULLDOWN: { w: 72, h: 44 },
+  DIODE: { w: 84, h: 52 }, RESISTOR: { w: 84, h: 44 },
   VDD: { w: 92, h: 52 }, GND: { w: 92, h: 52 }, IN: { w: 92, h: 52 }, PROBE: { w: 92, h: 52 },
 };
 
@@ -25,8 +25,9 @@ const W = 960, H = 540, PIN_R = 12;
 export function devicePins(kind) {
   if (kind === "NMOS" || kind === "PMOS" || kind === "NPN") return ["G", "A", "B"];
   if (kind === "DIODE") return ["A", "K"];
+  if (kind === "RESISTOR") return ["A", "B"];
   if (kind === "PROBE") return ["A"];
-  return ["Y"]; // PULLUP/PULLDOWN/VDD/GND/IN
+  return ["Y"]; // VDD/GND/IN
 }
 
 /** Pin anchor in device-local coords (center of the 24px hit target). */
@@ -37,7 +38,7 @@ export function pinAnchor(kind, pin) {
     if (pin === "A") return { x: w / 2, y: 0 };
     return { x: w / 2, y: h };
   }
-  if (kind === "DIODE") return pin === "A" ? { x: 0, y: h / 2 } : { x: w, y: h / 2 };
+  if (kind === "DIODE" || kind === "RESISTOR") return pin === "A" ? { x: 0, y: h / 2 } : { x: w, y: h / 2 };
   if (kind === "PROBE") return { x: 0, y: h / 2 };
   return { x: w, y: h / 2 };
 }
@@ -91,7 +92,10 @@ export function buildEngineNet(devices, segs) {
       case "DIODE":
         net.devices[d.id] = { id: d.id, kind: "DIODE", anode: t("A"), cathode: t("K") };
         break;
-      default: // PULLUP/PULLDOWN/VDD/GND/IN/PROBE
+      case "RESISTOR":
+        net.devices[d.id] = { id: d.id, kind: "RESISTOR", a: t("A"), b: t("B") };
+        break;
+      default: // VDD/GND/IN/PROBE (legacy PULLUP/PULLDOWN pass through untouched)
         net.devices[d.id] = { id: d.id, kind: d.kind, net: t(d.kind === "PROBE" ? "A" : "Y") };
         break;
     }
@@ -120,15 +124,14 @@ function diodeArt() {
     + `<path d="M56 10V42" stroke="#e8eefc" stroke-width="3"/>`
     + `<path d="M56 ${h / 2}H${w}" stroke="#8ea2c8" stroke-width="2"/></svg>`;
 }
-function pullArt(up) {
-  const { w, h } = CMOS_SIZE.PULLUP;
+function resArt() {
+  const { w, h } = CMOS_SIZE.RESISTOR;
   const pts = [];
-  for (let i = 0; i <= 6; i++) pts.push(`${10 + i * 8},${h / 2 + (i % 2 ? -8 : 8)}`);
+  for (let i = 0; i <= 6; i++) pts.push(`${14 + i * 8},${h / 2 + (i % 2 ? -8 : 8)}`);
   return `<svg class="cdev-art" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true">`
-    + `<path d="M0 ${h / 2}H10" stroke="#8ea2c8" stroke-width="2"/>`
+    + `<path d="M0 ${h / 2}H14" stroke="#8ea2c8" stroke-width="2"/>`
     + `<polyline points="${pts.join(" ")}" fill="none" stroke="#e8eefc" stroke-width="2"/>`
-    + `<path d="M58 ${h / 2}H${w}" stroke="#8ea2c8" stroke-width="2"/>`
-    + `<text x="30" y="12" fill="#93a3c4" font-size="9">${up ? "↑VDD" : "↓GND"}</text></svg>`;
+    + `<path d="M62 ${h / 2}H${w}" stroke="#8ea2c8" stroke-width="2"/></svg>`;
 }
 
 function deviceInner(dev, lamp) {
@@ -137,8 +140,8 @@ function deviceInner(dev, lamp) {
       return `<div class="node-title">${dev.kind}</div>${mosArt(dev.kind)}`;
     case "DIODE":
       return `<div class="node-title">DIODE</div>${diodeArt()}`;
-    case "PULLUP": return `<div class="node-title">PULL</div>${pullArt(true)}`;
-    case "PULLDOWN": return `<div class="node-title">PULL</div>${pullArt(false)}`;
+    case "RESISTOR":
+      return `<div class="node-title">RESISTOR</div>${resArt()}`;
     case "VDD": return `<div class="node-title term-vdd">VDD</div><div class="node-lamp on-static">1</div>`;
     case "GND": return `<div class="node-title">GND</div><div class="node-lamp">0</div>`;
     case "IN":
@@ -703,8 +706,9 @@ export function createCmosUI(deps) {
       if (!locked) card.addEventListener("click", () => loadLevel(i));
       list.appendChild(card);
     });
-    $("#mode-challenge").classList.remove("active");
-    $("#mode-sandbox").classList.remove("active");
+    for (const id of ["#mode-challenge", "#mode-sandbox", "#mode-cmos", "#mode-analog"]) {
+      document.querySelector(id)?.classList.remove("active");
+    }
     $("#mode-cmos").classList.add("active");
   }
 

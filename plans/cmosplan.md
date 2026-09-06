@@ -39,7 +39,11 @@ Switch-level network with three node states and two strengths:
   - `NPN(base, c, e)`: like NMOS (for the DTL chapter).
   - `DIODE(anode, cathode)`: conducts anode→cathode when anode = 1-ish
     (ideal: pulls cathode toward anode unless cathode strongly driven).
-  - `PULLUP(node)` / `PULLDOWN(node)`: weak 1 / weak 0.
+  - `RESISTOR(a, b)`: honest weak link both ways — a floating far end
+    follows weakly, a strongly driven end wins locally. A resistor straight
+    across the rails reads fine on both ends and never flags SHORT (like
+    real life, it just wastes power). No magic one-pin pulls: players wire
+    both ends to rails themselves.
   - `VDD` / `GND` terminals: fixed strong 1 / 0. `IN` switches, `PROBE`
     output lamps (also flag `X`).
 - Solver: seed rails/inputs, iterate conduction + strength resolution to a

@@ -297,7 +297,7 @@ test("CMOS Lab tab shows terminals and budgeted palette", async ({ page }) => {
   await expect(page.locator('.cdev[data-name="VDD"]')).toBeVisible();
   await expect(page.locator('.cdev[data-name="GND"]')).toBeVisible();
   // C1 budgets nothing: all parts locked but visible
-  await expect(page.locator("#palette .pal-btn")).toHaveCount(6);
+  await expect(page.locator("#palette .pal-btn")).toHaveCount(5);
   await expect(page.locator('.pal-btn[data-type="NMOS"]')).toBeDisabled();
 });
 
@@ -322,6 +322,26 @@ test("CMOS inverter solves end-to-end (place, wire, check)", async ({ page }) =>
   await page.locator("#check-btn").click();
   await expect(page.locator("#check-results")).toContainText("Solved!");
   await expect(page.locator(".level-card", { hasText: "CMOS NAND" })).toBeEnabled();
+});
+
+test("NMOS switch solves with a resistor down to GND", async ({ page }) => {
+  await unlockAll(page);
+  await page.locator("#mode-cmos").click();
+  await page.locator(".level-card", { hasText: "NMOS Switch" }).click();
+  await expect(page.locator("#level-name")).toContainText("NMOS Switch");
+  await page.locator('.pal-btn[data-type="NMOS"]').click();
+  await page.locator('.pal-btn[data-type="RESISTOR"]').click();
+  const pin = (name, p) => page.locator(`.cdev[data-name="${name}"] .pin[data-pin="${p}"]`);
+  const nPin = (p) => page.locator(`.cdev.kind-NMOS .pin[data-pin="${p}"]`);
+  const rPin = (p) => page.locator(`.cdev.kind-RESISTOR .pin[data-pin="${p}"]`);
+  const wire2 = async (a, b) => { await a.click(); await b.click(); };
+  await wire2(pin("VDD", "Y"), nPin("A"));
+  await wire2(pin("A", "Y"), nPin("G"));
+  await wire2(nPin("B"), pin("Y", "A"));
+  await wire2(rPin("A"), nPin("B"));
+  await wire2(rPin("B"), pin("GND", "Y"));
+  await page.locator("#check-btn").click();
+  await expect(page.locator("#check-results")).toContainText("Solved!");
 });
 
 test("CMOS playground offers free parts", async ({ page }) => {
@@ -395,6 +415,27 @@ test("free play opens every level and persists", async ({ page }) => {
   await page.reload();
   await expect(page.locator("#freeplay")).toBeChecked();
   await expect(page.locator(".level-card").nth(1)).toBeEnabled();
+});
+
+test("mode tabs switch cleanly with exactly one active", async ({ page }) => {
+  const tabs = ["#mode-challenge", "#mode-cmos", "#mode-analog", "#mode-sandbox"];
+  const activeCount = async () =>
+    page.evaluate(() => document.querySelectorAll(".mode-btn.active").length);
+  // Analog -> CMOS: the reported stickiness (tab highlight + transfer plot)
+  await page.locator("#mode-analog").click();
+  await expect(page.locator("#xfer-wrap")).toBeVisible();
+  await page.locator("#mode-cmos").click();
+  await expect(page.locator("#mode-analog")).not.toHaveClass(/active/);
+  await expect(page.locator("#mode-cmos")).toHaveClass(/active/);
+  await expect(page.locator("#xfer-wrap")).toBeHidden();
+  await expect(await activeCount()).toBe(1);
+  // full cycle back through every mode
+  for (const tab of tabs) {
+    await page.locator(tab).click();
+    await expect(page.locator(tab)).toHaveClass(/active/);
+    await expect(await activeCount()).toBe(1);
+  }
+  await expect(page.locator("#xfer-wrap")).toBeHidden();
 });
 
 test("reset button clears a placed gate", async ({ page }) => {

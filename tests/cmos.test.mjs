@@ -49,10 +49,10 @@ describe("switches", () => {
 
   it("NPN behaves like NMOS (base=gate)", () => {
     const net = createNet();
-    const { gnd } = rails(net);
+    const { vdd, gnd } = rails(net);
     const A = input(net, "A"), Y = addNetNode(net, "Y");
     addDevice(net, "NPN", { base: A.net, c: Y, e: gnd });
-    addDevice(net, "PULLUP", { net: Y });
+    addDevice(net, "RESISTOR", { a: Y, b: vdd });
     assert.equal(simulateCmos(net, { [A.id]: 1 }).states[Y].v, 0);
     assert.equal(simulateCmos(net, { [A.id]: 0 }).states[Y].v, 1);
   });
@@ -93,13 +93,23 @@ describe("gates from transistors", () => {
 
   it("weak pull loses to strong drive (no false short)", () => {
     const net = createNet();
-    const { vdd } = rails(net);
+    const { vdd, gnd } = rails(net);
     const Y = addNetNode(net, "Y");
-    addDevice(net, "PULLDOWN", { net: Y });
+    addDevice(net, "RESISTOR", { a: Y, b: gnd });
     addDevice(net, "PMOS", { gate: vdd, a: vdd, b: Y }); // gate=1 -> OFF
     const s = simulateCmos(net, {});
     assert.equal(s.states[Y].v, 0);
     assert.equal(s.short, false);
+  });
+
+  it("resistor across the rails reads fine, never shorts", () => {
+    const net = createNet();
+    const { vdd, gnd } = rails(net);
+    addDevice(net, "RESISTOR", { a: vdd, b: gnd });
+    const s = simulateCmos(net, {});
+    assert.equal(s.short, false);
+    assert.equal(s.states[vdd].v, 1);
+    assert.equal(s.states[gnd].v, 0);
   });
 });
 

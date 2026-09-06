@@ -13,12 +13,14 @@
  */
 
 export const CMOS_KINDS = [
-  "NMOS", "PMOS", "NPN", "DIODE", "PULLUP", "PULLDOWN",
+  "NMOS", "PMOS", "NPN", "DIODE", "RESISTOR", "PULLUP", "PULLDOWN",
   "VDD", "GND", "IN", "PROBE",
 ];
 
 // Budgeted parts (rails/IN/PROBE are free bench infrastructure).
-export const CMOS_PARTS = ["NMOS", "PMOS", "NPN", "DIODE", "PULLUP", "PULLDOWN"];
+// NOTE: gameplay uses the honest 2-terminal RESISTOR (wire one end to a
+// rail yourself). PULLUP/PULLDOWN remain as engine-supported legacy ideals.
+export const CMOS_PARTS = ["NMOS", "PMOS", "NPN", "DIODE", "RESISTOR"];
 
 export function createNet() {
   return { nets: {}, devices: {}, seq: 1 };
@@ -38,7 +40,8 @@ export function addNetNode(net, name, id) {
 /**
  * Add a device. Terminals reference net ids:
  *   NMOS/PMOS: { gate, a, b }          NPN: { base, c, e }
- *   DIODE: { anode, cathode }           PULLUP/PULLDOWN/VDD/GND/IN/PROBE: { net }
+ *   DIODE: { anode, cathode }           RESISTOR: { a, b }
+ *   PULLUP/PULLDOWN/VDD/GND/IN/PROBE: { net }
  */
 export function addDevice(net, kind, terminals, id) {
   if (!CMOS_KINDS.includes(kind)) throw new Error(`Unknown CMOS kind: ${kind}`);
@@ -130,6 +133,17 @@ export function simulateCmos(net, inputValues = {}, opts = {}) {
         case "NMOS": if (on(d.gate)) union(d.a, d.b); break;
         case "NPN": if (on(d.base)) union(d.c, d.e); break;
         case "PMOS": if (off(d.gate)) union(d.a, d.b); break;
+        case "RESISTOR": {
+          // Honest weak link, both directions: a rail holding one end still
+          // reads strong on its own net (weak copy loses locally), while a
+          // floating far end follows weakly. A resistor straight across the
+          // rails therefore reads fine on both ends and never flags SHORT —
+          // like real life, it just wastes power.
+          const sa = states[d.a], sb = states[d.b];
+          if (sa && sa.v !== "X") pushX(d.b, sa.v, 1);
+          if (sb && sb.v !== "X") pushX(d.a, sb.v, 1);
+          break;
+        }
         case "DIODE": {
           const k = states[d.cathode];
           if (k?.v === 0) pushX(d.anode, 0, 2); // forward bias: drag anode low hard

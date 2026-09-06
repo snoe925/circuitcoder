@@ -43,26 +43,26 @@ ref("c-power", () => {
   return { net, inIds: [], probeNets: [p1, p2] };
 });
 ref("c-nmos", () => {
-  const { net, vdd } = base();
+  const { net, vdd, gnd } = base();
   const [A] = mkInputs(net, ["A"]);
   const Y = addNetNode(net, "Y");
   addDevice(net, "NMOS", { gate: A.net, a: vdd, b: Y });
-  addDevice(net, "PULLDOWN", { net: Y });
+  addDevice(net, "RESISTOR", { a: Y, b: gnd });
   return { net, inIds: [A.id], probeNets: [Y] };
 });
 ref("c-pmos", () => {
-  const { net, vdd } = base();
+  const { net, vdd, gnd } = base();
   const [A] = mkInputs(net, ["A"]);
   const Y = addNetNode(net, "Y");
   addDevice(net, "PMOS", { gate: A.net, a: vdd, b: Y });
-  addDevice(net, "PULLDOWN", { net: Y });
+  addDevice(net, "RESISTOR", { a: Y, b: gnd });
   return { net, inIds: [A.id], probeNets: [Y] };
 });
 ref("c-rtl", () => {
-  const { net, gnd } = base();
+  const { net, vdd, gnd } = base();
   const [A] = mkInputs(net, ["A"]);
   const Y = addNetNode(net, "Y");
-  addDevice(net, "PULLUP", { net: Y });
+  addDevice(net, "RESISTOR", { a: vdd, b: Y });
   addDevice(net, "NMOS", { gate: A.net, a: Y, b: gnd });
   return { net, inIds: [A.id], probeNets: [Y] };
 });
@@ -100,23 +100,23 @@ ref("c-and", () => {
   return { net, inIds: [A.id, B.id], probeNets: [Y] };
 });
 ref("c-diode", () => {
-  const { net } = base();
+  const { net, vdd } = base();
   const [A, B] = mkInputs(net, ["A", "B"]);
   const Y = addNetNode(net, "Y");
   addDevice(net, "DIODE", { anode: Y, cathode: A.net });
   addDevice(net, "DIODE", { anode: Y, cathode: B.net });
-  addDevice(net, "PULLUP", { net: Y });
+  addDevice(net, "RESISTOR", { a: vdd, b: Y });
   return { net, inIds: [A.id, B.id], probeNets: [Y] };
 });
 ref("c-dtl", () => {
-  const { net, gnd } = base();
+  const { net, vdd, gnd } = base();
   const [A, B] = mkInputs(net, ["A", "B"]);
   const M = addNetNode(net, "M"), Y = addNetNode(net, "Y");
   addDevice(net, "DIODE", { anode: M, cathode: A.net });
   addDevice(net, "DIODE", { anode: M, cathode: B.net });
-  addDevice(net, "PULLUP", { net: M });
+  addDevice(net, "RESISTOR", { a: vdd, b: M });
   addDevice(net, "NPN", { base: M, c: Y, e: gnd });
-  addDevice(net, "PULLUP", { net: Y });
+  addDevice(net, "RESISTOR", { a: vdd, b: Y });
   return { net, inIds: [A.id, B.id], probeNets: [Y] };
 });
 ref("c-tgate", () => {

@@ -85,6 +85,15 @@ body {
 .kind-GND { border-color: var(--muted); }
 .term-vdd { color: #f87171 !important; }
 .node-lamp.on-static { background: #064e3b; border-color: var(--on); color: #d1fae5; }
+/* Seven-segment live display (seg puzzle levels) */
+.seg-display[hidden] { display: none; }
+.seg-row { display: flex; gap: 14px; align-items: center; background: #0b1122; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; margin: 8px 0; }
+.seg7 { flex: none; }
+.seg7 .seg-off { fill: #131c33; stroke: #2a3a5f; stroke-width: 1; }
+.seg7 .seg-on { fill: #34d399; filter: drop-shadow(0 0 4px #34d399aa); }
+.seg7 .seg-target { stroke: #fbbf24; stroke-width: 2; }
+.seg-cap { font-size: 12px; color: var(--muted); }
+.seg-cap b { color: var(--warn); }
 /* Clocked trace viewer */
 .trace-view { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
 .trace-view[hidden] { display: none; }

@@ -110,3 +110,44 @@ export function gateSVG(type) {
   if (!h) throw new Error(`No gate artwork for type: ${type}`);
   return `<svg class="gate" viewBox="0 0 92 ${h}" width="92" height="${h}" aria-hidden="true">${art(type)}</svg>`;
 }
+
+/** Standard 7-seg encoding: digit -> lit segments. */
+export const SEG_DIGITS = {
+  0: ["a", "b", "c", "d", "e", "f"],
+  1: ["b", "c"],
+  2: ["a", "b", "g", "e", "d"],
+  3: ["a", "b", "c", "d", "g"],
+  4: ["f", "g", "b", "c"],
+  5: ["a", "f", "g", "c", "d"],
+  6: ["a", "f", "g", "e", "c", "d"],
+  7: ["a", "b", "c"],
+  8: ["a", "b", "c", "d", "e", "f", "g"],
+  9: ["a", "b", "c", "d", "f", "g"],
+};
+
+const SEG_SHAPES = {
+  a: "12,2 48,2 44,8 16,8",
+  g: "12,46 48,46 44,52 16,52",
+  d: "12,90 48,90 44,96 16,96",
+  f: "10,12 15,10 15,44 10,46",
+  b: "45,10 50,12 50,46 45,44",
+  e: "10,54 15,52 15,86 10,88",
+  c: "45,52 50,54 50,88 45,86",
+};
+
+/**
+ * Seven-segment display SVG. digit 0-9 (null/other = blank/invalid).
+ * target (e.g. "e") outlines the segment the player is building.
+ */
+export function sevenSegSVG(digit, target = null) {
+  const valid = Number.isInteger(digit) && digit >= 0 && digit <= 9;
+  const lit = new Set(valid ? SEG_DIGITS[digit] : []);
+  const polys = ["a", "b", "c", "d", "e", "f", "g"]
+    .map((s) => {
+      const on = lit.has(s);
+      const hl = target === s ? " seg-target" : "";
+      return `<polygon data-seg="${s}" points="${SEG_SHAPES[s]}" class="seg ${on ? "seg-on" : "seg-off"}${hl}"/>`;
+    })
+    .join("");
+  return `<svg class="seg7" viewBox="0 0 60 100" width="60" height="100" role="img" aria-label="seven segment display${valid ? ` showing ${digit}` : " blank"}">${polys}</svg>`;
+}

@@ -17,7 +17,7 @@ import { LEVELS, starsFor } from "./levels.js";
 import { LEVELS_CLOCKED } from "./clocked-levels.js";
 import { simulateClocked, evaluateClocked } from "./clocked.js";
 import { loadSave, persistSave } from "./store.js";
-import { gateSVG } from "./gates.js";
+import { gateSVG, sevenSegSVG } from "./gates.js";
 import { outputExprs } from "./synth.js";
 import { kmapString } from "./minimize.js";
 import { createCmosUI } from "./cmos-ui.js";
@@ -835,6 +835,7 @@ function renderSpec() {
       .map(([t, n]) => `${t}×${n}`)
       .join(" · ");
     $("#level-budget").textContent = `Budget: ${budget} · Par: ${level.par} gates · Gates used: ${countGates(state.circuit)}`;
+    renderSegDisplay();
     renderTruthTable();
   } else {
     if (inClockedBench()) {
@@ -849,6 +850,26 @@ function renderSpec() {
     }
   }
   renderExprView();
+}
+
+/** Live 7-seg display for seg levels: digit from wxyz toggles, target outlined. */
+function renderSegDisplay() {
+  const box = $("#seg-display");
+  const level = currentLevel();
+  if (!level.segDisplay) {
+    box.hidden = true;
+    box.innerHTML = "";
+    return;
+  }
+  const bits = state.inputIds.map((id) => (state.inputStates[id] ? 1 : 0));
+  const digit = bits[0] * 8 + bits[1] * 4 + bits[2] * 2 + bits[3];
+  const target = (level.outputs[0] || "").toLowerCase();
+  const valid = digit <= 9;
+  box.innerHTML = `<div class="seg-row">${sevenSegSVG(valid ? digit : null, target)}`
+    + `<div class="seg-cap">input digit: <b>${valid ? digit : "–"}</b>${valid ? "" : " (invalid BCD)"}<br>`
+    + `target segment: <b>${target.toUpperCase()}</b> (outlined)<br>`
+    + `<span class="muted">toggle wxyz on the bench</span></div></div>`;
+  box.hidden = false;
 }
 
 /** Live boolean formulas per output; sandbox uses terminal names. */

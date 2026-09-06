@@ -532,6 +532,54 @@ test("Clocked bench appears in master sandbox", async ({ page }) => {
   await expect(page.locator(".node.type-CLOCK")).toHaveCount(1);
 });
 
+test("7-seg display tracks the BCD input digit", async ({ page }) => {
+  await unlockAll(page);
+  await page.locator("#mode-challenge").click();
+  await page.locator(".level-card", { hasText: "7-seg E" }).click();
+  await expect(page.locator("#level-name")).toContainText("7-seg E");
+  await expect(page.locator("#seg-display")).toBeVisible();
+  // inputs default 0000 -> digit 0; E is on for 0
+  await expect(page.locator('#seg-display [data-seg="e"]')).toHaveClass(/seg-on/);
+  await expect(page.locator('#seg-display [data-seg="e"]')).toHaveClass(/seg-target/);
+  await expect(page.locator("#seg-display")).toContainText("input digit: 0");
+  // toggle w (8s) -> digit 8; E is on for 8
+  const wId = await page.locator(".node.type-INPUT").first().getAttribute("data-id");
+  await page.locator(`.node[data-id="${wId}"]`).click();
+  await expect(page.locator("#seg-display")).toContainText("input digit: 8");
+  await expect(page.locator('#seg-display [data-seg="e"]')).toHaveClass(/seg-on/);
+  // toggle x too -> digit 12 (invalid BCD) -> blank
+  const xId = await page.locator(".node.type-INPUT").nth(1).getAttribute("data-id");
+  await page.locator(`.node[data-id="${xId}"]`).click();
+  await expect(page.locator("#seg-display")).toContainText("invalid BCD");
+  await expect(page.locator('#seg-display [data-seg="e"]')).toHaveClass(/seg-off/);
+});
+
+test("7-seg C solves end-to-end (¬y ∨ z ∨ x)", async ({ page }) => {
+  await unlockAll(page);
+  await page.locator("#mode-challenge").click();
+  await page.locator(".level-card", { hasText: "7-seg C" }).click();
+  await page.locator('.pal-btn[data-type="NOT"]').click();
+  await page.locator('.pal-btn[data-type="OR"]').click();
+  await page.locator('.pal-btn[data-type="OR"]').click();
+  const inIds = await page.locator(".node.type-INPUT").evaluateAll((els) => els.map((e) => e.dataset.id));
+  const [wId, xId, yId, zId] = inIds; // inputs order w,x,y,z
+  void wId;
+  const outId = await page.locator(".node.type-OUTPUT").getAttribute("data-id");
+  const notId = await page.locator(".node.type-NOT").getAttribute("data-id");
+  const orIds = await page.locator(".node.type-OR").evaluateAll((els) => els.map((e) => e.dataset.id));
+  const wire = async (a, b) => { await a.click(); await b.click(); };
+  const outPin = (id) => page.locator(`.node[data-id="${id}"] .pin.out`);
+  const inPin = (id, p) => page.locator(`.node[data-id="${id}"] .pin.in[data-pin="${p}"]`);
+  await wire(outPin(yId), inPin(notId, 0));
+  await wire(outPin(notId), inPin(orIds[0], 0));
+  await wire(outPin(zId), inPin(orIds[0], 1));
+  await wire(outPin(orIds[0]), inPin(orIds[1], 0));
+  await wire(outPin(xId), inPin(orIds[1], 1));
+  await wire(outPin(orIds[1]), inPin(outId, 0));
+  await page.locator("#check-btn").click();
+  await expect(page.locator("#check-results")).toContainText("Solved!");
+});
+
 test("reset button clears a placed gate", async ({ page }) => {
   await page.locator('.pal-btn[data-type="NOT"]').click();
   await expect(page.locator(".node.type-NOT")).toHaveCount(1);

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { gateSVG, GATE_ART_HEIGHT } from "../src/gates.js";
+import { gateSVG, GATE_ART_HEIGHT, SEG_DIGITS, sevenSegSVG } from "../src/gates.js";
 
 const ALL = ["AND", "OR", "NOT", "NAND", "NOR", "XOR", "XNOR"];
 
@@ -58,5 +58,41 @@ describe("gateSVG", () => {
     assert.match(gateSVG("CLOCK"), /<circle/);
     assert.match(gateSVG("DELAY"), /Δ1/);
     assert.match(gateSVG("DLATCH"), /EN/);
+  });
+});
+
+describe("sevenSegSVG", () => {
+  const EXPECTED = {
+    0: ["a", "b", "c", "d", "e", "f"],
+    1: ["b", "c"],
+    2: ["a", "b", "g", "e", "d"],
+    3: ["a", "b", "c", "d", "g"],
+    4: ["f", "g", "b", "c"],
+    5: ["a", "f", "g", "c", "d"],
+    6: ["a", "f", "g", "e", "c", "d"],
+    7: ["a", "b", "c"],
+    8: ["a", "b", "c", "d", "e", "f", "g"],
+    9: ["a", "b", "c", "d", "f", "g"],
+  };
+  it("encodes all ten digits with standard segments", () => {
+    assert.deepEqual(SEG_DIGITS, EXPECTED);
+  });
+  it("lights the right polygons and outlines the target", () => {
+    const svg = sevenSegSVG(2, "e");
+    for (const s of ["a", "b", "g", "e", "d"]) {
+      assert.match(svg, new RegExp(`data-seg="${s}"[^>]*seg-on`), `${s} lit for 2`);
+    }
+    for (const s of ["c", "f"]) {
+      assert.match(svg, new RegExp(`data-seg="${s}"[^>]*seg-off`), `${s} dark for 2`);
+    }
+    assert.match(svg, /data-seg="e"[^>]*seg-target/, "target outlined");
+    assert.ok(!/data-seg="a"[^>]*seg-target/.test(svg), "non-target not outlined");
+  });
+  it("blanks on invalid BCD", () => {
+    for (const bad of [null, 10, 15, -1]) {
+      const svg = sevenSegSVG(bad, "a");
+      assert.ok(!svg.includes("seg-on"), `blank for ${bad}`);
+      assert.match(svg, /aria-label="seven segment display blank"/);
+    }
   });
 });

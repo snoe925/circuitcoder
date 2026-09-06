@@ -21,7 +21,18 @@ npm run serve   # then open http://localhost:8000
 - Wires glow green for 1; lamps show 0/1 text too (color is never the only cue).
 - Progress + stars persist in `localStorage` (`circuitcoder.v1`).
 
-## Levels (112)
+## Modes
+
+- **Gates:** 112 challenges (Pack 1 + Pack 2) + Sandbox.
+- **CMOS Lab:** 12 challenges (rails → transistors → CMOS gates → DTL →
+  transmission gate → SR latch) + Playground. Transistors are
+  voltage-controlled switches: amber wires float, red means short.
+- **Op-Amp Lab:** 8 challenges (follower → comparator → amps → summer →
+  Schmitt → difference → clipping) + Playground. Ideal op-amps (±11V
+  rails, tolerance-checked), gradient wires, voltmeter probes, transfer
+  curve, source sliders, click-to-step resistors.
+
+## Gates levels (112)
 
 Pack 1: NOT → AND → OR → XOR-from-scratch → NAND-only XOR → NOR-only XOR →
 XNOR → Half Adder → Full Adder → 2:1 MUX → Majority → 2-bit Equality.
@@ -38,6 +49,8 @@ src/engine.js  # pure simulation (tested, zero DOM)
 src/gates.js   # traditional ANSI gate symbols as inline SVG (tested)
 src/levels.js  # Pack 1 catalogue + campaign merge (tested)
 src/pack2.js   # Pack 2: N01–N100 catalogue (tested)
+src/cmos.js    # CMOS switch-level simulator (tested; bench UI next)
+src/cmos-levels.js # CMOS Lab C1–C12 catalogue (tested)
 src/store.js   # localStorage persistence
 src/app.js     # UI: palette/canvas/wiring/verification
 tests/engine.test.mjs  tests/levels.test.mjs
@@ -58,6 +71,9 @@ npm run test:all # both
   solution for each level passes within budget at par (proves solvability);
   a wrong-circuit sanity check fails as expected.
 - `pack2.test.mjs`: same bar for all 100 Pack 2 levels (budgets, par, 3 stars).
+- `cmos.test.mjs` + `cmos-levels.test.mjs`: switch truths, CMOS NAND/NOR,
+  FLOAT/SHORT faults, diode AND, stateful SR latch, and all 12 CMOS Lab
+  references at par (bench UI still to come — see `plans/cmosplan.md`).
 - `gates.test.mjs`: every gate renders an SVG sized to its node box with
   leads reaching the pins, bubbles only on inverters, XOR pre-curve present.
 - `e2e/game.spec.js` (Playwright, 10 tests): level locks, palette/truth-table

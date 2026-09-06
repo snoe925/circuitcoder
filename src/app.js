@@ -18,6 +18,8 @@ import { loadSave, persistSave } from "./store.js";
 import { gateSVG } from "./gates.js";
 import { outputExprs } from "./synth.js";
 import { kmapString } from "./minimize.js";
+import { createCmosUI } from "./cmos-ui.js";
+import { createAnalogUI } from "./analog-ui.js";
 
 const W = 960;
 const H = 540;
@@ -27,6 +29,12 @@ const $ = (sel) => document.querySelector(sel);
 
 const save = loadSave();
 let showExpr = false;
+let cmosUI = null;
+const cmos = () => (cmosUI ??= createCmosUI({ $, save, persistSave }));
+let analogUI = null;
+const analog = () => (analogUI ??= createAnalogUI({ $, save, persistSave }));
+const inCmos = () => state.mode === "cmos";
+const inAnalog = () => state.mode === "analog";
 const state = {
   mode: "challenge",
   levelIndex: 0,
@@ -158,11 +166,9 @@ function usedCount(type) {
 function renderPalette() {
   const el = $("#palette");
   el.innerHTML = "";
-  const label = $("#palette-label");
-  if (label) {
-    label.textContent =
-      state.mode === "sandbox" ? "Parts (all unlocked)" : "Parts (this level's budget)";
-  }
+  $("#palette-label").textContent = state.mode === "sandbox" ? "Parts (all unlocked)" : "Parts (this level's budget)";
+  $("#palette-hint").textContent = "INPUT/OUTPUT terminals are pre-placed on the left/right — wire them up.";
+  $("#expr-toggle").style.display = "";
   for (const type of paletteEntries()) {
     const btn = document.createElement("button");
     btn.className = "pal-btn";
@@ -601,6 +607,11 @@ function renderSpec() {
   const isChallenge = state.mode === "challenge";
   $("#spec-challenge").hidden = !isChallenge;
   $("#spec-sandbox").hidden = isChallenge;
+  // restore shared spec chrome other modes may have changed
+  document.querySelector("#spec-challenge .check-row").style.display = "";
+  document.querySelector("#spec-challenge .table-wrap").style.display = "";
+  document.querySelector("#spec-challenge h3").style.display = "";
+  document.querySelector("#xfer-wrap").style.display = "none";
   if (isChallenge) {
     const level = currentLevel();
     $("#level-name").textContent = `${state.levelIndex + 1}. ${level.name}`;
@@ -778,6 +789,14 @@ function checkSolution() {
 // ---------- Level select ----------
 
 function renderLevels() {
+  if (inCmos()) {
+    cmos().renderLevelList();
+    return;
+  }
+  if (inAnalog()) {
+    analog().renderLevelList();
+    return;
+  }
   const list = $("#level-list");
   list.innerHTML = "";
   let lastChapter = null;
@@ -789,7 +808,7 @@ function renderLevels() {
       h.textContent = level.chapter ?? `Levels`;
       list.appendChild(h);
     }
-    const locked = i + 1 > save.unlocked && state.mode === "challenge";
+    const locked = i + 1 > save.unlocked && state.mode === "challenge" && !save.freePlay;
     const card = document.createElement("button");
     card.className = "level-card" + (i === state.levelIndex && state.mode === "challenge" ? " active" : "");
     card.disabled = locked;
@@ -805,18 +824,31 @@ function renderLevels() {
   // mode tabs
   $("#mode-challenge").classList.toggle("active", state.mode === "challenge");
   $("#mode-sandbox").classList.toggle("active", state.mode === "sandbox");
+  $("#mode-cmos").classList.toggle("active", inCmos());
+  $("#mode-analog").classList.toggle("active", inAnalog());
 }
 
 // ---------- Wiring ----------
 
 function bindGlobal() {
-  $("#check-btn").addEventListener("click", checkSolution);
-  $("#delete-btn").addEventListener("click", deleteSelected);
+  $("#check-btn").addEventListener("click", () => {
+    if (inCmos()) cmos().onCheck();
+    else if (inAnalog()) analog().onCheck();
+    else checkSolution();
+  });
+  $("#delete-btn").addEventListener("click", () => {
+    if (inCmos()) cmos().onDelete();
+    else if (inAnalog()) analog().onDelete();
+    else deleteSelected();
+  });
   $("#expr-toggle").addEventListener("click", () => {
+    if (inCmos() || inAnalog()) return; // expressions are a gates-mode aid
     showExpr = !showExpr;
     renderExprView();
   });
   $("#reset-btn").addEventListener("click", () => {
+    if (inCmos()) { cmos().onReset(); return; }
+    if (inAnalog()) { analog().onReset(); return; }
     if (state.mode === "challenge") loadLevel(state.levelIndex);
     else {
       state.circuit = createCircuit();
@@ -831,6 +863,8 @@ function bindGlobal() {
       return;
     }
     if (e.target.closest("#canvas")) {
+      if (inCmos()) { cmos().onCanvasBackground(); return; }
+      if (inAnalog()) { analog().onCanvasBackground(); return; }
       state.selected = null;
       state.pendingWire = null;
       renderNodes();
@@ -841,6 +875,8 @@ function bindGlobal() {
   window.addEventListener("resize", fitStage);
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
+      if (inCmos()) { cmos().onEscape(); return; }
+      if (inAnalog()) { analog().onEscape(); return; }
       state.pendingWire = null;
       state.selected = null;
       renderNodes();
@@ -849,7 +885,9 @@ function bindGlobal() {
     }
     if ((e.key === "Delete" || e.key === "Backspace") && !/INPUT|TEXTAREA/.test(document.activeElement?.tagName ?? "")) {
       e.preventDefault();
-      deleteSelected();
+      if (inCmos()) cmos().onDelete();
+      else if (inAnalog()) analog().onDelete();
+      else deleteSelected();
     }
   });
   $("#mode-challenge").addEventListener("click", () => {
@@ -857,6 +895,22 @@ function bindGlobal() {
     loadLevel(Math.min(state.levelIndex, save.unlocked - 1));
   });
   $("#mode-sandbox").addEventListener("click", loadSandbox);
+  $("#mode-cmos").addEventListener("click", () => {
+    state.mode = "cmos";
+    cmos().enter();
+  });
+  $("#mode-analog").addEventListener("click", () => {
+    state.mode = "analog";
+    analog().enter();
+  });
+  const free = $("#freeplay");
+  free.checked = save.freePlay === true;
+  free.addEventListener("change", () => {
+    save.freePlay = free.checked;
+    persistSave(save);
+    renderLevels();
+    setStatus(free.checked ? "Free play on: every level is open." : "Free play off: back to progression.");
+  });
   $("#help-btn").addEventListener("click", () => ($("#help-modal").hidden = false));
   $("#help-close").addEventListener("click", () => ($("#help-modal").hidden = true));
   $("#help-modal").addEventListener("click", (e) => {

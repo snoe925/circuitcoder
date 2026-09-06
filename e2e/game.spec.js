@@ -208,7 +208,11 @@ async function unlockAll(page) {
   await page.evaluate(() =>
     localStorage.setItem(
       "circuitcoder.v1",
-      JSON.stringify({ unlocked: 500, stars: {}, sandbox: null })
+      JSON.stringify({
+        unlocked: 500, stars: {}, sandbox: null,
+        cmos: { unlocked: 500, stars: {}, playground: null },
+        analog: { unlocked: 500, stars: {}, playground: null },
+      })
     )
   );
   await page.reload();
@@ -284,6 +288,113 @@ test("K-map hint shows on 2-input levels, hides on 1-input", async ({ page }) =>
   await page.locator("#hint-details summary").click();
   await expect(page.locator("#kmap-pre")).toContainText("Y:");
   await expect(page.locator("#kmap-pre")).toContainText("1");
+});
+
+test("CMOS Lab tab shows terminals and budgeted palette", async ({ page }) => {
+  await page.locator("#mode-cmos").click();
+  await expect(page.locator("#level-name")).toContainText("C1. Power It Up");
+  await expect(page.locator('.cdev[data-name="P1"]')).toBeVisible();
+  await expect(page.locator('.cdev[data-name="VDD"]')).toBeVisible();
+  await expect(page.locator('.cdev[data-name="GND"]')).toBeVisible();
+  // C1 budgets nothing: all parts locked but visible
+  await expect(page.locator("#palette .pal-btn")).toHaveCount(6);
+  await expect(page.locator('.pal-btn[data-type="NMOS"]')).toBeDisabled();
+});
+
+test("CMOS inverter solves end-to-end (place, wire, check)", async ({ page }) => {
+  await unlockAll(page);
+  await page.locator("#mode-cmos").click();
+  await page.locator(".level-card", { hasText: "CMOS Inverter" }).click();
+  await expect(page.locator("#level-name")).toContainText("CMOS Inverter");
+  await page.locator('.pal-btn[data-type="PMOS"]').click();
+  await page.locator('.pal-btn[data-type="NMOS"]').click();
+  const pin = (name, p) => page.locator(`.cdev[data-name="${name}"] .pin[data-pin="${p}"]`);
+  const gatePin = (kind, p, n = 0) => page.locator(`.cdev.kind-${kind} >> nth=${n} >> .pin[data-pin="${p}"]`);
+  // VDD->PMOS.A, A->PMOS.G, A->NMOS.G, PMOS.B->Y, NMOS.A->Y, NMOS.B->GND
+  const wire2 = async (a, b) => { await a.click(); await b.click(); };
+  await wire2(pin("VDD", "Y"), gatePin("PMOS", "A"));
+  await wire2(pin("A", "Y"), gatePin("PMOS", "G"));
+  await wire2(pin("A", "Y"), gatePin("NMOS", "G"));
+  await wire2(gatePin("PMOS", "B"), pin("Y", "A"));
+  await wire2(gatePin("NMOS", "A"), pin("Y", "A"));
+  await wire2(gatePin("NMOS", "B"), pin("GND", "Y"));
+  await expect(page.locator("#wires path.wire:not(.wire-hit)")).toHaveCount(6);
+  await page.locator("#check-btn").click();
+  await expect(page.locator("#check-results")).toContainText("Solved!");
+  await expect(page.locator(".level-card", { hasText: "CMOS NAND" })).toBeEnabled();
+});
+
+test("CMOS playground offers free parts", async ({ page }) => {
+  await page.locator("#mode-cmos").click();
+  await page.locator(".level-card.playground").click();
+  await expect(page.locator("#spec-sandbox")).toBeVisible();
+  await expect(page.locator('.pal-btn[data-type="IN"]')).toBeEnabled();
+  await page.locator('.pal-btn[data-type="NMOS"]').click();
+  await expect(page.locator(".cdev.kind-NMOS")).toHaveCount(1);
+});
+
+test("Op-Amp Lab tab shows sources, rails and budgeted palette", async ({ page }) => {
+  await page.locator("#mode-analog").click();
+  await expect(page.locator("#level-name")).toContainText("O1. Voltage Follower");
+  await expect(page.locator('.cdev[data-name="Vin"]')).toBeVisible();
+  await expect(page.locator('.cdev[data-name="+12V"]')).toBeVisible();
+  await expect(page.locator('.cdev[data-name="GND"]')).toBeVisible();
+  await expect(page.locator("#palette .pal-btn")).toHaveCount(2);
+  await expect(page.locator('.pal-btn[data-type="OPAMP"]')).toBeEnabled();
+});
+
+test("Voltage follower solves end-to-end (place, wire, check)", async ({ page }) => {
+  await unlockAll(page);
+  await page.locator("#mode-analog").click();
+  await page.locator("#mode-analog").click();
+  await expect(page.locator("#level-name")).toContainText("O1. Voltage Follower");
+  await page.locator('.pal-btn[data-type="OPAMP"]').click();
+  const pin = (name, p) => page.locator(`.cdev[data-name="${name}"] .pin[data-pin="${p}"]`);
+  const opPin = (p) => page.locator(`.cdev.kind-OPAMP .pin[data-pin="${p}"]`);
+  const wire2 = async (a, b) => { await a.click(); await b.click(); };
+  await wire2(pin("Vin", "P"), opPin("+"));
+  await wire2(opPin("OUT"), opPin("-"));
+  await wire2(opPin("OUT"), pin("Out", "S"));
+  await wire2(pin("Vin", "M"), pin("GND", "S"));
+  await expect(page.locator("#wires path.wire:not(.wire-hit)")).toHaveCount(4);
+  await page.locator("#check-btn").click();
+  await expect(page.locator("#check-results")).toContainText("Solved!");
+  await expect(page.locator("#xfer path")).not.toHaveCount(0);
+  await expect(page.locator(".level-card", { hasText: "Comparator" })).toBeEnabled();
+});
+
+test("Analog playground offers free parts", async ({ page }) => {
+  await page.locator("#mode-analog").click();
+  await page.locator(".level-card.playground").click();
+  await expect(page.locator("#spec-sandbox")).toBeVisible();
+  await expect(page.locator('.pal-btn[data-type="VSRC"]')).toBeEnabled();
+  await page.locator('.pal-btn[data-type="OPAMP"]').click();
+  await expect(page.locator(".cdev.kind-OPAMP")).toHaveCount(1);
+});
+
+test("free play opens every level and persists", async ({ page }) => {
+  await expect(page.locator(".level-card").nth(1)).toBeDisabled();
+  await page.locator("#freeplay").check();
+  await expect(page.locator(".level-card").nth(1)).toBeEnabled();
+  await expect(page.locator(".level-card").nth(111)).toBeEnabled();
+  await page.locator(".level-card").nth(111).click();
+  await expect(page.locator("#level-name")).toContainText("Flipped Parity");
+  // CMOS Lab honors it too
+  await page.locator("#mode-cmos").click();
+  await expect(page.locator(".level-card", { hasText: "SR Latch" })).toBeEnabled();
+  await page.locator(".level-card", { hasText: "SR Latch" }).click();
+  await expect(page.locator("#level-name")).toContainText("SR Latch");
+  // Op-Amp Lab too
+  await page.locator("#mode-analog").click();
+  await expect(page.locator(".level-card", { hasText: "Clipping Lab" })).toBeEnabled();
+  // turning it off re-locks, and the flag survives reload
+  await page.locator("#freeplay").uncheck();
+  await page.locator("#mode-challenge").click();
+  await expect(page.locator(".level-card").nth(1)).toBeDisabled();
+  await page.locator("#freeplay").check();
+  await page.reload();
+  await expect(page.locator("#freeplay")).toBeChecked();
+  await expect(page.locator(".level-card").nth(1)).toBeEnabled();
 });
 
 test("reset button clears a placed gate", async ({ page }) => {

@@ -76,7 +76,22 @@ body {
 .lvl-num { font-weight: 800; }
 .lvl-stars { color: var(--warn); }
 .lvl-tag { grid-column: 2 / 4; color: var(--muted); font-size: 12px; }
+.level-card.playground { border-style: dashed; }
+/* CMOS bench devices */
+.cdev-art { display: block; }
+.kind-IN { border-style: dashed; border-color: var(--on); }
+.kind-PROBE { border-style: dashed; border-color: var(--accent); }
+.kind-VDD { border-color: #b91c1c; }
+.kind-GND { border-color: var(--muted); }
+.term-vdd { color: #f87171 !important; }
+.node-lamp.on-static { background: #064e3b; border-color: var(--on); color: #d1fae5; }
+.node-lamp.probe-v { width: auto; min-width: 44px; border-radius: 8px; font-size: 12px; padding: 0 6px; }
+.vsrc-slider { width: 90%; margin: 4px auto 2px; accent-color: var(--accent); }
+#xfer { width: 100%; height: auto; background: #0b1122; border: 1px solid var(--line); border-radius: 8px; }
 .hint, .muted { color: var(--muted); font-size: 12px; }
+.freeplay { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; margin-top: 8px; }
+.freeplay.top { margin-top: 0; color: var(--muted); white-space: nowrap; }
+.freeplay input { width: 16px; height: 16px; accent-color: var(--accent); }
 .bench { display: flex; flex-direction: column; gap: 8px; }
 .palette { display: flex; flex-wrap: wrap; gap: 8px; }
 .pal-btn {
@@ -151,6 +166,7 @@ svg.gate { display: block; }
 .wire.v1 { stroke: var(--on); filter: drop-shadow(0 0 4px #34d39988); }
 .wire.selected { stroke: var(--accent); stroke-width: 4; }
 .wire-hit { fill: none; stroke: transparent; stroke-width: 14; cursor: pointer; }
+.wire.vX { stroke: var(--warn); stroke-dasharray: 7 5; }
 .wire.pending-ghost { fill: none; stroke: var(--warn); stroke-width: 3; stroke-dasharray: 6 5; }
 .results { margin: 8px 0; min-height: 22px; font-size: 13px; }
 .pass { color: var(--good); font-weight: 700; }
@@ -170,7 +186,7 @@ td.live-cell { color: var(--accent); }
   align-items: center; justify-content: center; padding: 16px; z-index: 10;
 }
 .modal[hidden] { display: none; }
-.modal-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; max-width: 520px; }
+.modal-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; max-width: 520px; max-height: 88vh; overflow-y: auto; }
 .cheat li { margin-bottom: 4px; }
 @media (max-width: 1100px) {
   .layout { grid-template-columns: 1fr; }

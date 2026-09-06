@@ -92,6 +92,13 @@ Par = transistor/resistor counts above; budgets exact-fit early, +1–2 later.
 `evaluateCmos(netlist, level)` mirrors `evaluateLevel`. Prefill reused for
 "broken inverter (missing pull-up)" style debug levels later.
 
+Stateful levels (the SR latch): `stateful: true` carries net states across
+test vectors, except vectors marked `{ fresh: true }` which reset first.
+Driven transitions (set/reset) start from unknown; hold vectors verify
+memory. Rationale: an ideal switch model flags a legal reset-after-hold
+as contention (held pull-up vs fresh pull-down), so each driven edge gets
+a fresh start — physically honest (power-on with inputs asserted).
+
 ## Phase 2 — Op-Amp Lab (analog DC, idealized)
 
 ### Simulation model (`src/analog.js`, pure, tested) — DC only
@@ -153,12 +160,23 @@ no non-ideal specs (offset, slew, GBW) — "ideal + rails" only.
 
 ## Build order & acceptance
 
-1. `src/cmos.js` + tests (solver first, netlists second).
-2. CMOS parts art + bench rails + X/SHORT wire states + probes.
-3. C1–C12 levels + references; progress plumbing per mode.
+1. [x] `src/cmos.js` + tests (solver first, netlists second).
+2. [x] CMOS parts art + bench rails + X/SHORT wire states + probes
+   (`src/cmos-ui.js`: MOSFET/diode/pull/rail art, amber `?` wires, SHORT
+   and FLOAT banners, grid placement so devices never bury pins).
+3. [x] C1–C12 levels + references (`src/cmos-levels.js`,
+   `tests/cmos-levels.test.mjs` — all at par); progress plumbing per mode
+   (`save.cmos`, mode tab, chapter list, CMOS Playground card).
 4. Op-amp: `src/analog.js` (MNA + saturation) + tests, then bench UI
    (gradient wires, probes, transfer plot), then O1–O8.
 5. E2E + docs (README modes section, help cheat-sheets).
+
+Status: Phase 1 (CMOS) and Phase 2 bench shipped — `src/analog.js` (MNA +
+consistency-search saturation + hysteresis sweep), O1–O8 catalogue with
+references at par, analog bench (`src/analog-ui.js`: gradient wires,
+voltmeter probes, transfer-curve plot, source sliders, click-to-step
+resistors), per-mode progress, playgrounds, help cheat-sheets.
+Remaining: CMOS debug-prefill levels.
 
 Done = new tab(s) playable end-to-end with the same quality bar:
 exhaustive or sampled tests per level, reference builds in-repo, stars,

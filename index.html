@@ -10,10 +10,15 @@
   <header class="topbar">
     <div class="brand">⚡ Circuit Coder <span class="sub">browser remake</span></div>
     <nav class="modes" aria-label="Game mode">
-      <button id="mode-challenge" class="mode-btn">Challenges</button>
+      <button id="mode-challenge" class="mode-btn">Gates</button>
+      <button id="mode-cmos" class="mode-btn">CMOS Lab</button>
+      <button id="mode-analog" class="mode-btn">Op-Amp Lab</button>
       <button id="mode-sandbox" class="mode-btn">Sandbox</button>
     </nav>
     <div class="top-actions">
+      <label class="freeplay top" title="Leave progression behind: every level in every mode becomes playable. Progress and stars still save.">
+        <input type="checkbox" id="freeplay" /> Free play
+      </label>
       <button id="help-btn" class="btn">? Help</button>
       <button id="reset-btn" class="btn">Reset</button>
     </div>
@@ -35,7 +40,7 @@
       </div>
       <div class="palette-head">
         <span id="palette-label">Parts</span>
-        <span class="hint">INPUT/OUTPUT terminals are pre-placed on the left/right — wire them up.</span>
+        <span class="hint" id="palette-hint">INPUT/OUTPUT terminals are pre-placed on the left/right — wire them up.</span>
       </div>
       <div id="palette" class="palette" aria-label="Parts palette"></div>
       <div class="canvas-toolbar">
@@ -65,6 +70,10 @@
         <div id="check-results" class="results"></div>
         <h3>Truth table</h3>
         <div class="table-wrap"><table id="truth-table"></table></div>
+        <div id="xfer-wrap" style="display:none">
+          <h3>Transfer curve</h3>
+          <svg id="xfer" role="img" aria-label="Output versus input sweep"></svg>
+        </div>
         <details id="hint-details" class="hint-box" hidden>
           <summary>Hint: Karnaugh map</summary>
           <p class="muted">Same info as the table above, regrouped — spot the rectangles to plan your gates.</p>
@@ -96,6 +105,18 @@
         <li><b>NAND</b> ¬(A∧B) · <b>NOR</b> ¬(A∨B) — both universal</li>
         <li><b>XOR</b> A⊕B (differ) · <b>XNOR</b> (equal)</li>
         <li>Unconnected inputs read as <b>0</b>. Loops are flagged <b>UNSTABLE</b> and fail.</li>
+      </ul>
+      <h3>CMOS Lab cheat-sheet</h3>
+      <ul class="cheat">
+        <li><b>NMOS</b> connects when gate=1 · <b>PMOS</b> connects when gate=0</li>
+        <li><b>Diode</b> pulls its anode low when forward-biased · <b>PULLs</b> hold a net weakly</li>
+        <li>Amber dashed wires are <b>floating (?)</b> — complete the path. Red means <b>SHORT</b>: VDD meets GND.</li>
+      </ul>
+      <h3>Op-Amp Lab cheat-sheet</h3>
+      <ul class="cheat">
+        <li>Golden rules: <b>V+ ≈ V−</b> (until the output hits the <b>±11V</b> rails)</li>
+        <li>Non-inverting gain <b>1+Rf/R1</b> · inverting gain <b>−Rf/Rin</b></li>
+        <li>Every source needs a <b>ground return</b> · click a <b>resistor</b> to step 1k→10k→100k · drag a <b>source slider</b> to play</li>
       </ul>
       <button id="help-close" class="btn primary">Got it</button>
     </div>

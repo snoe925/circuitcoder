@@ -40,6 +40,7 @@
       <div id="palette" class="palette" aria-label="Parts palette"></div>
       <div class="canvas-toolbar">
         <button id="delete-btn" class="btn danger" disabled>Delete selected (Del)</button>
+        <button id="expr-toggle" class="btn" aria-pressed="false" title="Show each output as a boolean expression">fx: expressions</button>
         <span id="status" class="status" role="status"></span>
       </div>
       <div class="canvas-scroll">
@@ -50,6 +51,7 @@
         </div>
       </div>
       </div>
+      <div id="expr-view" class="expr-view" hidden aria-live="polite"></div>
     </section>
 
     <aside class="spec" aria-label="Specification">
@@ -63,6 +65,11 @@
         <div id="check-results" class="results"></div>
         <h3>Truth table</h3>
         <div class="table-wrap"><table id="truth-table"></table></div>
+        <details id="hint-details" class="hint-box" hidden>
+          <summary>Hint: Karnaugh map</summary>
+          <p class="muted">Same info as the table above, regrouped — spot the rectangles to plan your gates.</p>
+          <pre id="kmap-pre"></pre>
+        </details>
       </div>
       <div id="spec-sandbox" hidden>
         <h2>Playground</h2>
@@ -80,6 +87,8 @@
         <li><b>Wire:</b> click <i>any</i> pin — an output (right dot) or an input (left dots) — then click the other end. Each input takes one wire — rewiring replaces it. Click a wire to select, Del to remove.</li>
         <li><b>Move:</b> drag a gate. <b>Toggle:</b> click an INPUT. <b>Lamps</b> show OUTPUT (also 0/1 text).</li>
         <li><b>Check solution</b> runs every hidden test case. Green = pass.</li>
+        <li><b>fx: expressions</b> shows each output as a live boolean formula — handy for checking your wiring reads the way you think.</li>
+        <li><b>Hint: Karnaugh map</b> under the truth table regroups 2–4 input levels to help plan gates.</li>
       </ol>
       <h3>Gate cheat-sheet</h3>
       <ul class="cheat">

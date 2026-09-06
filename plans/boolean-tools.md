@@ -8,6 +8,11 @@ so future levels can be authored as **write expr → minimize → emit level**.
 
 Nothing here changes the game engine or UI (all additive, dev-facing first).
 
+> SHIPPED player-facing (separate track, now in game): `circuitExpr` /
+> `outputExprs` in `src/synth.js` power the **fx: expressions** toggle, and
+> `kmapString` powers the per-level **Hint: Karnaugh map** panel
+> (2–4 inputs, exhaustive tables only). No minimized-answer spoiler is shown.
+
 ## Part 1 — Boolean expression sublanguage (`src/expr.js`)
 
 ### Grammar (ASCII-first, `¬∧∨⊕` aliases accepted)

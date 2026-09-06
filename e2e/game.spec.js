@@ -256,6 +256,36 @@ test("debug ward level loads its buggy prefill (unfinished wiring)", async ({ pa
   await expect(page.locator("#check-results")).toContainText("Solved!");
 });
 
+test("expression view shows live formulas per output", async ({ page }) => {
+  await expect(page.locator("#expr-view")).toBeHidden();
+  await page.locator("#expr-toggle").click();
+  await expect(page.locator("#expr-view")).toBeVisible();
+  await expect(page.locator("#expr-view")).toContainText("Y = 0");
+  // Wire up NOT and watch the formula update
+  await page.locator('.pal-btn[data-type="NOT"]').click();
+  const inp = (await page.locator(".node.type-INPUT").evaluateAll((els) => els.map((e) => e.dataset.id)))[0];
+  const not = (await page.locator(".node.type-NOT").evaluateAll((els) => els.map((e) => e.dataset.id)))[0];
+  const outp = (await page.locator(".node.type-OUTPUT").evaluateAll((els) => els.map((e) => e.dataset.id)))[0];
+  await page.locator(`.node[data-id="${inp}"] .pin.out`).click();
+  await page.locator(`.node[data-id="${not}"] .pin.in[data-pin="0"]`).click();
+  await page.locator(`.node[data-id="${not}"] .pin.out`).click();
+  await page.locator(`.node[data-id="${outp}"] .pin.in[data-pin="0"]`).click();
+  await expect(page.locator("#expr-view")).toContainText("Y = ¬A");
+  await page.locator("#expr-toggle").click();
+  await expect(page.locator("#expr-view")).toBeHidden();
+});
+
+test("K-map hint shows on 2-input levels, hides on 1-input", async ({ page }) => {
+  // Level 1 has a single input: no map
+  await expect(page.locator("#hint-details")).toBeHidden();
+  await unlockAll(page);
+  await page.locator(".level-card", { hasText: "AND Gate" }).click();
+  await expect(page.locator("#hint-details")).toBeVisible();
+  await page.locator("#hint-details summary").click();
+  await expect(page.locator("#kmap-pre")).toContainText("Y:");
+  await expect(page.locator("#kmap-pre")).toContainText("1");
+});
+
 test("reset button clears a placed gate", async ({ page }) => {
   await page.locator('.pal-btn[data-type="NOT"]').click();
   await expect(page.locator(".node.type-NOT")).toHaveCount(1);

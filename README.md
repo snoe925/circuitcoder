@@ -14,6 +14,9 @@ npm run serve   # then open http://localhost:8000
 
 - **Challenges:** pick a level → add gates from the palette → click an output
   pin then an input pin to wire → click INPUTs to toggle → **Check solution**.
+- **fx: expressions** toggle shows each output as a live boolean formula.
+- **Hint: Karnaugh map** under the truth table (2–4 input levels) regroups
+  expected outputs to help plan gates.
 - **Sandbox:** everything unlocked, autosaved to `localStorage`.
 - Wires glow green for 1; lamps show 0/1 text too (color is never the only cue).
 - Progress + stars persist in `localStorage` (`circuitcoder.v1`).
@@ -62,6 +65,20 @@ npm run test:all # both
   reload, input toggling, live output lamp, wire replacement, sandbox palette,
   help modal, reset. Run with `npm run test:e2e` (first run:
   `npx playwright install chromium`).
+
+## Designing a level (authoring tools)
+
+```bash
+node scripts/kmap.mjs --on 0,2,6,8 --dc 10-15 --vars w,x,y,z
+node scripts/kmap.mjs --expr "(~x & ~z) | (y & ~z)" --vars w,x,y,z
+```
+
+Prints the K-map, minimized expression, cover JSON, and a gate estimate —
+paste those into a `src/pack2.js` entry (`cover`/`allowed`/`par`), add a
+reference build with `buildSOP` from `src/synth.js`, and `npm test` proves
+solvability. Library modules: `src/expr.js` (expression parser),
+`src/minimize.js` (Quine–McCluskey + K-maps), `src/synth.js` (SOP builder,
+gate estimator, NAND/NOR-only compiler). Full plan: `plans/boolean-tools.md`.
 
 ## Manual UI checklist (now automated in e2e)
 

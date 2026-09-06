@@ -29,6 +29,22 @@ body {
   padding: 6px 12px; border-radius: 8px; cursor: pointer;
 }
 .mode-btn.active { background: var(--panel2); border-color: var(--accent); }
+.btn.active { border-color: var(--accent); box-shadow: 0 0 0 2px #60a5fa44; }
+.expr-view {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 8px 12px; font-size: 13px;
+}
+.expr-view[hidden] { display: none; }
+.expr-row { padding: 2px 0; }
+.expr-row code { font-size: 13px; }
+.expr-name { color: var(--accent); font-weight: 700; }
+.hint-box { margin-top: 10px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+.hint-box[hidden] { display: none; }
+.hint-box summary { cursor: pointer; color: var(--accent); font-size: 13px; }
+.hint-box pre {
+  background: #0b1122; border-radius: 6px; padding: 8px; overflow-x: auto;
+  font-size: 12px; line-height: 1.5; margin: 8px 0 4px;
+}
 .top-actions { margin-left: auto; display: flex; gap: 8px; }
 .btn {
   background: var(--panel2); color: var(--txt); border: 1px solid var(--line);

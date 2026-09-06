@@ -9,6 +9,7 @@ import {
 } from "../src/engine.js";
 import { LEVELS_PACK2 } from "../src/pack2.js";
 import { starsFor } from "../src/levels.js";
+import { buildSOP } from "../src/synth.js";
 
 function W(c, from, to, toPin = 0) {
   const r = addWire(c, from, to, toPin, 0);
@@ -57,26 +58,7 @@ function xorClassic(c, A, B) {
   W(c, t1, o, 0); W(c, t2, o, 1);
   return o;
 }
-// Generic sum-of-products builder from a cover: [[[var, polarity]]].
-function buildSOP(c, insByVar, cover, outId) {
-  const notFor = {};
-  for (const t of cover) for (const [v, pol] of t) {
-    if (!pol && !notFor[v]) { const g = G(c, "NOT"); W(c, insByVar[v], g, 0); notFor[v] = g; }
-  }
-  const terms = cover.map((t) => {
-    const srcs = t.map(([v, pol]) => (pol ? insByVar[v] : notFor[v]));
-    let cur = srcs[0];
-    for (let i = 1; i < srcs.length; i++) {
-      const g = G(c, "AND"); W(c, cur, g, 0); W(c, srcs[i], g, 1); cur = g;
-    }
-    return cur;
-  });
-  let out = terms[0];
-  for (let i = 1; i < terms.length; i++) {
-    const g = G(c, "OR"); W(c, out, g, 0); W(c, terms[i], g, 1); out = g;
-  }
-  W(c, out, outId, 0);
-}
+// Generic sum-of-products builder lives in src/synth.js (shared with authors).
 
 const R = {};
 function ref(id, fn) { R[id] = fn; }

@@ -16,6 +16,8 @@ import {
 import { LEVELS, starsFor } from "./levels.js";
 import { loadSave, persistSave } from "./store.js";
 import { gateSVG } from "./gates.js";
+import { outputExprs } from "./synth.js";
+import { kmapString } from "./minimize.js";
 
 const W = 960;
 const H = 540;
@@ -24,6 +26,7 @@ const NODE_W = 92;
 const $ = (sel) => document.querySelector(sel);
 
 const save = loadSave();
+let showExpr = false;
 const state = {
   mode: "challenge",
   levelIndex: 0,
@@ -612,6 +615,35 @@ function renderSpec() {
       liveSim?.status === "UNSTABLE" ? " · ⚠ feedback loop (combinational only)" : ""
     }`;
   }
+  renderExprView();
+}
+
+/** Live boolean formulas per output; sandbox uses terminal names. */
+function renderExprView() {
+  const box = $("#expr-view");
+  const toggle = $("#expr-toggle");
+  toggle.setAttribute("aria-pressed", String(showExpr));
+  toggle.classList.toggle("active", showExpr);
+  if (!showExpr) {
+    box.hidden = true;
+    box.innerHTML = "";
+    return;
+  }
+  const names = {};
+  if (state.mode === "challenge") {
+    const level = currentLevel();
+    state.inputIds.forEach((id, i) => (names[id] = level.inputs[i]));
+    state.outputIds.forEach((id, i) => (names[id] = level.outputs[i]));
+  }
+  const exprs = outputExprs(state.circuit, state.outputIds, names);
+  const rows = Object.entries(exprs).map(([name, text]) => {
+    const shown = text.length > 300 ? text.slice(0, 300) + " …" : text;
+    return `<div class="expr-row"><span class="expr-name">${name} =</span> <code>${shown}</code></div>`;
+  });
+  box.innerHTML =
+    (liveSim?.status === "UNSTABLE" ? `<div class="warn">⟳ loop — expressions unstable</div>` : "") +
+    (rows.join("") || `<span class="muted">No outputs yet.</span>`);
+  box.hidden = false;
 }
 
 function renderTruthTable() {
@@ -679,6 +711,27 @@ function renderTruthTable() {
   } else if (!state.lastResults) {
     res.innerHTML = `<span class="muted">Press “Check solution” to run all ${level.tests.length} cases.</span>`;
   }
+  renderKmapHint();
+}
+
+/** K-map hint regrouping the expected table (2–4 inputs, exhaustive only). */
+function renderKmapHint() {
+  const details = $("#hint-details");
+  const level = currentLevel();
+  const n = level.inputs.length;
+  if (n < 2 || n > 4 || level.tests.length !== 2 ** n) {
+    details.hidden = true;
+    return;
+  }
+  const vars = level.inputs;
+  const blocks = level.outputs.map((oname, j) => {
+    const on = level.tests
+      .filter((t) => t.out[j] === 1)
+      .map((t) => parseInt(t.in.join(""), 2));
+    return `${oname}:\n${kmapString({ on, dc: [], vars })}`;
+  });
+  $("#kmap-pre").textContent = blocks.join("\n\n");
+  details.hidden = false;
 }
 
 function checkSolution() {
@@ -759,6 +812,10 @@ function renderLevels() {
 function bindGlobal() {
   $("#check-btn").addEventListener("click", checkSolution);
   $("#delete-btn").addEventListener("click", deleteSelected);
+  $("#expr-toggle").addEventListener("click", () => {
+    showExpr = !showExpr;
+    renderExprView();
+  });
   $("#reset-btn").addEventListener("click", () => {
     if (state.mode === "challenge") loadLevel(state.levelIndex);
     else {

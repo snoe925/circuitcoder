@@ -114,6 +114,15 @@ export function createAnalogUI(deps) {
     showPicker: false, // true when hosted inside the master sandbox
   };
   let live = null; // { sim, endpointNet }
+  const pinEventStamp = { key: null, t: 0 };
+  let bodyDownId = null;
+  const markPin = (devId, pin) => {
+    pinEventStamp.key = `${devId}:${pin}`;
+    pinEventStamp.t = Date.now();
+    bodyDownId = null;
+  };
+  const pinFresh = (devId, pin) =>
+    pinEventStamp.key === `${devId}:${pin}` && Date.now() - pinEventStamp.t < 800;
 
   const level = () => LEVELS_ANALOG[S.levelIndex];
   const isPlayground = () => S.playground;
@@ -298,8 +307,16 @@ export function createAnalogUI(deps) {
         b.setAttribute("aria-label", `Pin ${p} of ${dev.name ?? dev.id}.`);
         b.style.left = `${a.x - PIN_R}px`;
         b.style.top = `${a.y - PIN_R}px`;
-        b.addEventListener("pointerdown", (e) => { e.stopPropagation(); onPin(dev.id, p); });
-        b.addEventListener("click", (e) => { e.stopPropagation(); onPin(dev.id, p); });
+        b.addEventListener("pointerdown", (e) => {
+          e.stopPropagation();
+          markPin(dev.id, p);
+          onPin(dev.id, p);
+        });
+        b.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (pinFresh(dev.id, p)) return;
+          onPin(dev.id, p);
+        });
         div.appendChild(b);
       }
       if (dev.kind === "VSRC") {
@@ -327,10 +344,12 @@ export function createAnalogUI(deps) {
       }
       div.addEventListener("pointerdown", (e) => {
         if (e.target.closest(".pin") || e.target.closest(".node-del") || e.target.closest("input")) return;
+        bodyDownId = dev.id;
         startDrag(e, dev.id);
       });
       div.addEventListener("click", (e) => {
         if (e.target.closest(".pin") || e.target.closest(".node-del") || e.target.closest("input")) return;
+        if (bodyDownId !== dev.id) return; // trailing click of a pin tap
         S.selected = { kind: "dev", id: dev.id };
         if (dev.kind === "RES") {
           // Clicking a resistor selects it AND steps its value (announced).
@@ -449,8 +468,10 @@ export function createAnalogUI(deps) {
       const sel = (e) => {
         e.stopPropagation();
         S.selected = { kind: "seg", id: s.id };
-        renderSegs(); renderDevices();
+        renderDevices();
+        renderSegs();
         $("#delete-btn").disabled = false;
+        setStatus("Wire selected — tap × on the wire or Delete to remove it.");
       };
       path.addEventListener("click", sel);
       svg.appendChild(path);
@@ -459,6 +480,28 @@ export function createAnalogUI(deps) {
       hit.setAttribute("class", "wire-hit");
       hit.addEventListener("click", sel);
       svg.appendChild(hit);
+      if (S.selected?.kind === "seg" && S.selected.id === s.id) {
+        const badge = document.createElement("button");
+        badge.className = "wire-del";
+        badge.textContent = "×";
+        badge.setAttribute("aria-label", "Delete selected wire");
+        try {
+          const mid = path.getPointAtLength(path.getTotalLength() / 2);
+          badge.style.left = `${mid.x - 11}px`;
+          badge.style.top = `${mid.y - 11}px`;
+        } catch {
+          badge.style.left = `${(p1.x + p2.x) / 2 - 11}px`;
+          badge.style.top = `${(p1.y + p2.y) / 2 - 11}px`;
+        }
+        badge.addEventListener("click", (e) => {
+          e.stopPropagation();
+          delete S.segs[s.id];
+          S.selected = null;
+          setStatus("Wire removed.");
+          afterMutation();
+        });
+        document.querySelector("#nodes").appendChild(badge);
+      }
     }
     if (S.pending) {
       const d = S.devices[S.pending.dev];
@@ -708,7 +751,7 @@ export function createAnalogUI(deps) {
       $("#delete-btn").disabled = true;
     },
     onCanvasBackground: () => {
-      S.pending = null; S.selected = null;
+      S.selected = null;
       renderDevices(); renderSegs();
       $("#delete-btn").disabled = true;
     },

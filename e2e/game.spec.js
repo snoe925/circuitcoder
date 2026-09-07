@@ -602,6 +602,48 @@ test("mobile layout: bench before levels, touch scrolls past gates", async ({ pa
   expect(order.touchNode).toBe("none");
 });
 
+test.describe("touch wiring", () => {
+  test.use({ hasTouch: true, viewport: { width: 390, height: 844 } });
+
+  test("tap output pin then input pin wires and solves", async ({ page }) => {
+    await page.locator('.pal-btn[data-type="NOT"]').tap();
+    const inId = await page.locator(".node.type-INPUT").first().getAttribute("data-id");
+    const notId = await page.locator(".node.type-NOT").getAttribute("data-id");
+    const outId = await page.locator(".node.type-OUTPUT").first().getAttribute("data-id");
+    await page.locator(`.node[data-id="${inId}"] .pin.out`).tap();
+    await expect(page.locator("#status")).toContainText("Output selected");
+    await page.locator(`.node[data-id="${notId}"] .pin.in[data-pin="0"]`).tap();
+    await expect(page.locator("#wires path.wire:not(.wire-hit):not(.pending-ghost)")).toHaveCount(1);
+    await page.locator(`.node[data-id="${notId}"] .pin.out`).tap();
+    await page.locator(`.node[data-id="${outId}"] .pin.in[data-pin="0"]`).tap();
+    await expect(page.locator("#wires path.wire:not(.wire-hit):not(.pending-ghost)")).toHaveCount(2);
+    await page.locator("#check-btn").tap();
+    await expect(page.locator("#check-results")).toContainText("Solved!");
+  });
+
+  test("tapping a wire shows an × badge that deletes it", async ({ page }) => {
+    await page.locator('.pal-btn[data-type="NOT"]').tap();
+    const inId = await page.locator(".node.type-INPUT").first().getAttribute("data-id");
+    const notId = await page.locator(".node.type-NOT").getAttribute("data-id");
+    await page.locator(`.node[data-id="${inId}"] .pin.out`).tap();
+    await page.locator(`.node[data-id="${notId}"] .pin.in[data-pin="0"]`).tap();
+    // freshly wired -> already selected with badge
+    await expect(page.locator(".wire-del")).toBeVisible();
+    await expect(page.locator("#status")).toContainText("Wired.");
+    await page.locator(".wire-del").tap();
+    await expect(page.locator("#wires path.wire:not(.wire-hit):not(.pending-ghost)")).toHaveCount(0);
+    await expect(page.locator("#status")).toContainText("Wire removed");
+    // re-wire, deselect via background, re-select by tapping the wire
+    await page.locator(`.node[data-id="${inId}"] .pin.out`).tap();
+    await page.locator(`.node[data-id="${notId}"] .pin.in[data-pin="0"]`).tap();
+    await page.locator("#canvas").tap({ position: { x: 350, y: 300 } });
+    await expect(page.locator(".wire-del")).toBeHidden();
+    await page.locator("#wires path.wire-hit").first().tap();
+    await expect(page.locator(".wire-del")).toBeVisible();
+    await expect(page.locator("#status")).toContainText("Wire selected");
+  });
+});
+
 test("reset button clears a placed gate", async ({ page }) => {
   await page.locator('.pal-btn[data-type="NOT"]').click();
   await expect(page.locator(".node.type-NOT")).toHaveCount(1);

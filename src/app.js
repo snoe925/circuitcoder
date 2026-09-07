@@ -408,6 +408,17 @@ function renderNodes() {
 
     // pins (24px targets; centered on the pin point)
     const PIN_R = 12;
+    // Touch/mouse taps fire pointerdown/up AND a trailing click on the
+    // re-rendered pin; the pointer handler already acted, so the click
+    // must not act twice (it would instantly cancel the pending wire).
+    // Keyboard activation fires click alone and still works.
+    const markPin = (kind2, pin2) => {
+      pinEventStamp.key = `${node.id}:${kind2}:${pin2}`;
+      pinEventStamp.t = Date.now();
+      bodyDownId = null; // any later body click can't be from this gesture
+    };
+    const pinFresh = (kind2, pin2) =>
+      pinEventStamp.key === `${node.id}:${kind2}:${pin2}` && Date.now() - pinEventStamp.t < 800;
     const nOut = def.outputs;
     for (let o = 0; o < nOut; o++) {
       const oy = nOut <= 1
@@ -426,10 +437,12 @@ function renderNodes() {
       p.style.left = `${NODE_W - PIN_R}px`;
       p.addEventListener("pointerdown", (e) => {
         e.stopPropagation();
+        markPin("out", o);
         onOutputPin(node.id, o);
       });
       p.addEventListener("click", (e) => {
         e.stopPropagation();
+        if (pinFresh("out", o)) return;
         onOutputPin(node.id, o);
       });
       div.appendChild(p);
@@ -451,10 +464,12 @@ function renderNodes() {
       p.style.left = `${-PIN_R}px`;
       p.addEventListener("pointerup", (e) => {
         e.stopPropagation();
+        markPin("in", i);
         onInputPin(node.id, i);
       });
       p.addEventListener("click", (e) => {
         e.stopPropagation();
+        if (pinFresh("in", i)) return;
         onInputPin(node.id, i);
       });
       div.appendChild(p);
@@ -478,8 +493,14 @@ function renderNodes() {
       if (e.target.closest(".pin") || e.target.closest(".node-del")) return;
       startDrag(e, node.id);
     });
+    div.addEventListener("pointerdown", (e) => {
+      if (e.target.closest(".pin") || e.target.closest(".node-del")) return;
+      bodyDownId = node.id;
+      startDrag(e, node.id);
+    });
     div.addEventListener("click", (e) => {
       if (e.target.closest(".pin") || e.target.closest(".node-del")) return;
+      if (bodyDownId !== node.id) return; // trailing click of a pin tap, not a body tap
       if (node.type === "INPUT") toggleInput(node.id);
       else if (node.type === "CLOCK") {
         node.period = node.period >= 8 ? 2 : (node.period ?? 2) * 2;
@@ -507,6 +528,13 @@ function renderNodes() {
 
 let liveSim = null;
 
+// Last pin handled via pointerdown/pointerup (see renderNodes guard).
+const pinEventStamp = { key: null, t: 0 };
+// Trailing click of a pin tap has no matching body pointerdown (the gesture
+// started on a pin that re-rendered away); require one for body clicks so
+// stray taps can't toggle inputs or cycle clocks.
+let bodyDownId = null;
+
 function wirePathD(a, b) {
   const dx = Math.max(30, Math.abs(b.x - a.x) / 2);
   return `M ${a.x} ${a.y} C ${a.x + dx} ${a.y}, ${b.x - dx} ${b.y}, ${b.x} ${b.y}`;
@@ -528,27 +556,46 @@ function renderWires() {
     if (wire.fromPin === 1 && (from.type === "DFF" || from.type === "TFF")) v = v ? 0 : 1;
     path.setAttribute("class", `wire v${v}` + (state.selected?.kind === "wire" && state.selected.id === wire.id ? " selected" : ""));
     path.dataset.id = wire.id;
-    path.addEventListener("click", (e) => {
+    const selectWire = (e) => {
       e.stopPropagation();
       state.selected = { kind: "wire", id: wire.id };
-      renderWires();
       renderNodes();
+      renderWires();
       updateDeleteBtn();
-    });
+      setStatus("Wire selected — tap × on the wire or Delete to remove it.");
+    };
+    path.addEventListener("click", selectWire);
     svg.appendChild(path);
     // invisible fat hit path
     const hit = document.createElementNS("http://www.w3.org/2000/svg", "path");
     hit.setAttribute("d", wirePathD(a, b));
     hit.setAttribute("class", "wire-hit");
     hit.dataset.id = wire.id;
-    hit.addEventListener("click", (e) => {
-      e.stopPropagation();
-      state.selected = { kind: "wire", id: wire.id };
-      renderWires();
-      renderNodes();
-      updateDeleteBtn();
-    });
+    hit.addEventListener("click", selectWire);
     svg.appendChild(hit);
+    // × badge at the midpoint of the selected wire (touch-friendly delete)
+    if (state.selected?.kind === "wire" && state.selected.id === wire.id) {
+      const badge = document.createElement("button");
+      badge.className = "wire-del";
+      badge.textContent = "×";
+      badge.setAttribute("aria-label", "Delete selected wire");
+      try {
+        const mid = path.getPointAtLength(path.getTotalLength() / 2);
+        badge.style.left = `${mid.x - 11}px`;
+        badge.style.top = `${mid.y - 11}px`;
+      } catch {
+        badge.style.left = `${(a.x + b.x) / 2 - 11}px`;
+        badge.style.top = `${(a.y + b.y) / 2 - 11}px`;
+      }
+      badge.addEventListener("click", (e) => {
+        e.stopPropagation();
+        removeWire(state.circuit, wire.id);
+        state.selected = null;
+        setStatus("Wire removed.");
+        afterMutation();
+      });
+      document.querySelector("#nodes").appendChild(badge);
+    }
   }
   // pending wire preview stub
   if (state.pendingWire) {
@@ -1339,8 +1386,10 @@ function bindGlobal() {
       const b = activeBench();
       if (b === "cmos") { cmos().onCanvasBackground(); return; }
       if (b === "analog") { analog().onCanvasBackground(); return; }
+      // Deselect, but keep a pending wire: on touch the tap's trailing
+      // click lands here after pins re-render mid-gesture, and clearing
+      // would make touch wiring impossible. Cancel via Esc or same pin.
       state.selected = null;
-      state.pendingWire = null;
       renderNodes();
       renderWires();
       updateDeleteBtn();

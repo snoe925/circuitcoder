@@ -140,7 +140,8 @@ body {
    and terminals can't be clipped on narrow screens. */
 #stage { position: absolute; left: 0; top: 0; width: 960px; height: 540px; transform-origin: 0 0; }
 #wires { position: absolute; left: 0; top: 0; width: 960px; height: 540px; }
-#nodes { position: absolute; left: 0; top: 0; width: 960px; height: 540px; }
+#nodes { position: absolute; left: 0; top: 0; width: 960px; height: 540px; pointer-events: none; }
+#nodes .node, #nodes .pin, #nodes .node-del, #nodes .wire-del { pointer-events: auto; }
 .node {
   position: absolute; width: 92px; border: 1px solid var(--line);
   background: #16213c; border-radius: 10px; text-align: center;
@@ -189,6 +190,11 @@ svg.gate { display: block; }
 .node-del {
   position: absolute; top: -10px; right: -10px; width: 22px; height: 22px;
   border-radius: 50%; border: 1px solid var(--bad); background: #3b1212; color: #fecaca; cursor: pointer;
+}
+.wire-del {
+  position: absolute; width: 24px; height: 24px; z-index: 5;
+  border-radius: 50%; border: 2px solid var(--bad); background: #3b1212; color: #fecaca;
+  font-size: 14px; line-height: 1; cursor: pointer; padding: 0;
 }
 .wire { fill: none; stroke: var(--off); stroke-width: 3; }
 .wire.v1 { stroke: var(--on); filter: drop-shadow(0 0 4px #34d39988); }

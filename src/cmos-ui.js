@@ -174,6 +174,18 @@ export function createCmosUI(deps) {
     showPicker: false, // true when hosted inside the master sandbox
   };
   let live = null;
+  // Touch/mouse taps fire pointerdown AND a trailing click on the
+  // re-rendered pin; the pointer handler already acted, so the click
+  // must not act twice. Keyboard activation fires click alone.
+  const pinEventStamp = { key: null, t: 0 };
+  let bodyDownId = null;
+  const markPin = (devId, pin) => {
+    pinEventStamp.key = `${devId}:${pin}`;
+    pinEventStamp.t = Date.now();
+    bodyDownId = null;
+  };
+  const pinFresh = (devId, pin) =>
+    pinEventStamp.key === `${devId}:${pin}` && Date.now() - pinEventStamp.t < 800;
 
   const level = () => LEVELS_CMOS[S.levelIndex];
   const isPlayground = () => S.playground;
@@ -361,8 +373,16 @@ export function createCmosUI(deps) {
         b.setAttribute("aria-label", `Pin ${p} of ${dev.name ?? dev.id}. Activate to start or finish a wire.`);
         b.style.left = `${a.x - PIN_R}px`;
         b.style.top = `${a.y - PIN_R}px`;
-        b.addEventListener("pointerdown", (e) => { e.stopPropagation(); onPin(dev.id, p); });
-        b.addEventListener("click", (e) => { e.stopPropagation(); onPin(dev.id, p); });
+        b.addEventListener("pointerdown", (e) => {
+          e.stopPropagation();
+          markPin(dev.id, p);
+          onPin(dev.id, p);
+        });
+        b.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (pinFresh(dev.id, p)) return;
+          onPin(dev.id, p);
+        });
         div.appendChild(b);
       }
       if (!dev.locked && S.selected?.kind === "dev" && S.selected.id === dev.id) {
@@ -375,10 +395,12 @@ export function createCmosUI(deps) {
       }
       div.addEventListener("pointerdown", (e) => {
         if (e.target.closest(".pin") || e.target.closest(".node-del")) return;
+        bodyDownId = dev.id;
         startDrag(e, dev.id);
       });
       div.addEventListener("click", (e) => {
         if (e.target.closest(".pin") || e.target.closest(".node-del")) return;
+        if (bodyDownId !== dev.id) return; // trailing click of a pin tap, not a body tap
         if (dev.kind === "IN") {
           S.inputStates[dev.id] = S.inputStates[dev.id] ? 0 : 1;
           afterMutation();
@@ -493,24 +515,44 @@ export function createCmosUI(deps) {
       path.setAttribute("d", wireD(p1, p2));
       path.setAttribute("class", `wire ${cls}` + (S.selected?.kind === "seg" && S.selected.id === s.id ? " selected" : ""));
       path.dataset.id = s.id;
-      path.addEventListener("click", (e) => {
+      const selectSeg = (e) => {
         e.stopPropagation();
         S.selected = { kind: "seg", id: s.id };
-        renderSegs(); renderDevices();
+        renderDevices();
+        renderSegs();
         $("#delete-btn").disabled = false;
-      });
+        setStatus("Wire selected — tap × on the wire or Delete to remove it.");
+      };
+      path.addEventListener("click", selectSeg);
       svg.appendChild(path);
       const hit = document.createElementNS("http://www.w3.org/2000/svg", "path");
       hit.setAttribute("d", wireD(p1, p2));
       hit.setAttribute("class", "wire-hit");
       hit.dataset.id = s.id;
-      hit.addEventListener("click", (e) => {
-        e.stopPropagation();
-        S.selected = { kind: "seg", id: s.id };
-        renderSegs(); renderDevices();
-        $("#delete-btn").disabled = false;
-      });
+      hit.addEventListener("click", selectSeg);
       svg.appendChild(hit);
+      if (S.selected?.kind === "seg" && S.selected.id === s.id) {
+        const badge = document.createElement("button");
+        badge.className = "wire-del";
+        badge.textContent = "×";
+        badge.setAttribute("aria-label", "Delete selected wire");
+        try {
+          const mid = path.getPointAtLength(path.getTotalLength() / 2);
+          badge.style.left = `${mid.x - 11}px`;
+          badge.style.top = `${mid.y - 11}px`;
+        } catch {
+          badge.style.left = `${(p1.x + p2.x) / 2 - 11}px`;
+          badge.style.top = `${(p1.y + p2.y) / 2 - 11}px`;
+        }
+        badge.addEventListener("click", (e) => {
+          e.stopPropagation();
+          delete S.segs[s.id];
+          S.selected = null;
+          setStatus("Wire removed.");
+          afterMutation();
+        });
+        document.querySelector("#nodes").appendChild(badge);
+      }
     }
     if (S.pending) {
       const d = S.devices[S.pending.dev];
@@ -742,7 +784,7 @@ export function createCmosUI(deps) {
       $("#delete-btn").disabled = true;
     },
     onCanvasBackground: () => {
-      S.pending = null; S.selected = null;
+      S.selected = null;
       renderDevices(); renderSegs();
       $("#delete-btn").disabled = true;
     },

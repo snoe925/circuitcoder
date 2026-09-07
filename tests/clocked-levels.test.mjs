@@ -24,7 +24,9 @@ const ref = (id, fn) => { R[id] = fn; };
 ref("k-blink", () => {
   const c = createCircuit();
   const k = CLK(c);
-  return { circuit: c, names: { CLK: k } };
+  const y = OUT(c, "Y");
+  W(c, k, y, 0);
+  return { circuit: c, names: { CLK: k, Y: y } };
 });
 ref("k-delay", () => {
   const c = createCircuit();
@@ -149,8 +151,7 @@ describe("clocked catalogue", () => {
   it("has 12 levels with sane scenarios and budgets", () => {
     assert.equal(LEVELS_CLOCKED.length, 12);
     const ids = new Set();
-    for (const l of LEVELS_CLOCKED) {
-      assert.ok(l.mode === "clocked" && l.chapter === "Clocked");
+    for (const l of LEVELS_CLOCKED) {      assert.ok(l.mode === "clocked" && l.chapter === "Clocked");
       assert.ok(!ids.has(l.id));
       ids.add(l.id);
       assert.ok(l.ticks >= 1 && l.tests.length >= 1);
@@ -161,6 +162,10 @@ describe("clocked catalogue", () => {
         }
       }
       assert.ok(l.par >= 0 && l.par <= 9, `${l.id} par range`);
+      // input/clock/probe names share one namespace in nameToId — a
+      // collision silently shadows (this caught k-blink's CLK/CLK).
+      const names = [...l.inputs, ...(l.clocks ?? []), ...l.probes];
+      assert.equal(new Set(names).size, names.length, `${l.id} duplicate terminal names`);
     }
   });
 

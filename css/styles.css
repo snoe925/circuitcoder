@@ -18,12 +18,12 @@ body {
   font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 .topbar {
-  display: flex; align-items: center; gap: 12px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
 }
 .brand { font-weight: 800; letter-spacing: .3px; }
 .brand .sub { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 6px; }
-.modes { display: flex; gap: 8px; margin-left: 8px; }
+.modes { display: flex; gap: 8px; margin-left: 8px; flex-wrap: wrap; }
 .mode-btn {
   background: transparent; color: var(--txt); border: 1px solid var(--line);
   padding: 6px 12px; border-radius: 8px; cursor: pointer;
@@ -134,7 +134,7 @@ body {
     radial-gradient(circle, #223154 1px, transparent 1.2px) 0 0/24px 24px,
     linear-gradient(#0f1830, #0f1830);
   border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
-  touch-action: none;
+  touch-action: pan-x pan-y;
 }
 /* Fixed 960x540 stage scaled via JS so nodes and wires always align
    and terminals can't be clipped on narrow screens. */
@@ -145,6 +145,7 @@ body {
   position: absolute; width: 92px; border: 1px solid var(--line);
   background: #16213c; border-radius: 10px; text-align: center;
   user-select: none; cursor: grab; padding: 4px 2px;
+  touch-action: none;
 }
 .node.selected { border-color: var(--accent); box-shadow: 0 0 0 2px #60a5fa66; }
 .node-title { font-size: 10px; color: var(--muted); letter-spacing: .4px; }
@@ -217,4 +218,7 @@ td.live-cell { color: var(--accent); }
 .cheat li { margin-bottom: 4px; }
 @media (max-width: 1100px) {
   .layout { grid-template-columns: 1fr; }
+  /* edit area first on small screens: levels/spec scroll below the bench */
+  .bench { order: -1; }
+  .level-list { max-height: 40vh; }
 }

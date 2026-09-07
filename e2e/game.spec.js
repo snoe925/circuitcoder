@@ -490,6 +490,14 @@ test("Clocked tab shows clock terminals and traces", async ({ page }) => {
   await expect(page.locator("#trace-view")).toBeVisible();
   await expect(page.locator("#traces path")).not.toHaveCount(0);
   await expect(page.locator("#t-scrub")).toBeVisible();
+  // K1 regression: probe is a separate Y terminal (not shadowing CLK).
+  // Wire CLK -> Y and the level must solve starting-low.
+  const clkId = await page.locator(".node.type-CLOCK").getAttribute("data-id");
+  const outId = await page.locator(".node.type-OUTPUT").getAttribute("data-id");
+  await page.locator(`.node[data-id="${clkId}"] .pin.out`).click();
+  await page.locator(`.node[data-id="${outId}"] .pin.in[data-pin="0"]`).click();
+  await page.locator("#check-btn").click();
+  await expect(page.locator("#check-results")).toContainText("Solved!");
 });
 
 test("Divide-by-2 solves end-to-end (toggle HI, wire, check)", async ({ page }) => {
@@ -578,6 +586,20 @@ test("7-seg C solves end-to-end (¬y ∨ z ∨ x)", async ({ page }) => {
   await wire(outPin(orIds[1]), inPin(outId, 0));
   await page.locator("#check-btn").click();
   await expect(page.locator("#check-results")).toContainText("Solved!");
+});
+
+test("mobile layout: bench before levels, touch scrolls past gates", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  const order = await page.evaluate(() => {
+    const y = (s) => document.querySelector(s).getBoundingClientRect().y;
+    const cs = (s) => getComputedStyle(document.querySelector(s)).touchAction;
+    return { canvasY: y("#canvas"), sidebarY: y(".sidebar"), touchCanvas: cs("#canvas"), touchNode: cs(".node") };
+  });
+  expect(order.canvasY).toBeLessThan(order.sidebarY);
+  expect(order.canvasY).toBeLessThan(844);
+  expect(order.touchCanvas).toBe("pan-x pan-y");
+  expect(order.touchNode).toBe("none");
 });
 
 test("reset button clears a placed gate", async ({ page }) => {

@@ -6,9 +6,9 @@
  */
 export const LEVELS_CLOCKED = [
   { id: "k-blink", mode: "clocked", chapter: "Clocked", name: "Blink", tag: "Time base",
-    briefing: "Nothing to build: run 8 ticks and watch the CLK lane. Edges land on odd ticks — every divider below keys off them.",
-    allowed: {}, par: 0, inputs: [], clocks: ["CLK"], probes: ["CLK"], ticks: 8,
-    tests: [{ in: {}, expect: { CLK: [0, 1, 0, 1, 0, 1, 0, 1] } }] },
+    briefing: "One wire to start: connect the CLK terminal to the Y probe, then run. The clock starts low and rises on odd ticks — watch the Y lane copy it.",
+    allowed: {}, par: 0, inputs: [], clocks: ["CLK"], probes: ["Y"], ticks: 8,
+    tests: [{ in: {}, expect: { Y: [0, 1, 0, 1, 0, 1, 0, 1] } }] },
   { id: "k-delay", mode: "clocked", chapter: "Clocked", name: "Delay Line", tag: "Shift",
     briefing: "Send one pulse through two DELAYs: out[t] = in[t−2]. Program D = 1,0,0,0,0,0,0,0 and read Y.",
     allowed: { DELAY: 2 }, par: 2, inputs: ["D"], clocks: ["CLK"], probes: ["Y"], ticks: 8,
